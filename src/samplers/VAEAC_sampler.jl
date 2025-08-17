@@ -1,22 +1,23 @@
-using Flux
-using Flux: Dense, Chain, logitcrossentropy, σ
-using MLDatasets
-using Random
-using Statistics: mean
-using Distributions
-using MLUtils: eachbatch
-using Flux.Optimise: update!, Adam
-using CairoMakie
+# # using Flux
+# # using Flux: Dense, Chain, logitcrossentropy, σ
+# using MLDatasets
+# using Random
+# using Statistics: mean
+# using Distributions
+# using MLUtils: eachbatch
+# # using Flux.Optimise: update!, Adam
+# using CairoMakie
 import ProbAbEx as PAE
-using Serialization
-using StaticBitSets
+# using Serialization
+# using StaticBitSets
 
+# todo: GPU, Reactant.jl
 
 # ========== Model Definition ==========
 struct VAEAC
-    proposal_net::Chain
-    prior_net::Chain
-    decoder_net::Chain
+    proposal_net::Lux.Chain
+    prior_net::Lux.Chain
+    decoder_net::Lux.Chain
 end
 
 struct ConditionedVAEAC
@@ -100,7 +101,7 @@ function forward(x, mask, model::VAEAC)
     return logits, μ_q, logσ_q, μ_p, logσ_p
 end
 
-# ========== Loss function ==========
+# ========== Loss function ========== #! check paper
 function loss_fn(x, mask, model::VAEAC)
     logits, μ_q, logσ_q, μ_p, logσ_p = forward(x, mask, model)
     recon_loss = sum(Flux.binarycrossentropy.(σ.(logits), x) .* (1f0 .- mask)) / size(x, 2)
@@ -143,8 +144,8 @@ function train()
 end
 
 # ========== Run training ==========
-model = train()
-serialize("vaeac_model_25.jls", model)
+# model = train()
+# serialize("vaeac_model_25.jls", model)
 
 # ========== Sample function ==========
 function sample_and_save(x, mask, model; binary=true)
@@ -184,13 +185,14 @@ function sample_and_save(x, mask, model; binary=true)
     fig
 end
 
-sampler = deserialize("/home/poludsof/ProbAbEx/models/vaeac_model.jls")
-mask = falses(784, 1)
-mask[500:550] .= true
-mask[600:601] .= true
-mask[400:401] .= true
-x = load_binary_mnist()[:, 1]
-fig = sample_and_save(x, mask, sampler, binary = false)
+# sampler = deserialize("/home/poludsof/ProbAbEx/models/vaeac_model.jls")
+# mask = falses(784, 1)
+# mask[300:303] .= true
+# mask[500:502] .= true
+# mask[603:605] .= true
+# x = load_binary_mnist()[:, 1]
+# fig = sample_and_save(x, mask, sampler, binary = false)
+
 
 
 function condition(model::VAEAC, xₛ::Vector{Float32}, known_ii::SBitSet)
@@ -228,6 +230,6 @@ function sample_all!(u::AbstractMatrix{Float32}, r::ConditionedVAEAC)
     return u
 end
 
-known_ii = SBitSet{13, UInt64}(collect(500:550))
-conditioned = condition(sampler, x, known_ii)
-samples = sample_all(conditioned, 5)  # (784, 5)
+# known_ii = SBitSet{13, UInt64}(collect(500:550))
+# conditioned = condition(sampler, x, known_ii)
+# samples = sample_all(conditioned, 5)  # (784, 5)
