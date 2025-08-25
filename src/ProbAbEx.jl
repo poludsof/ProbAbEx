@@ -8,6 +8,7 @@ using JuMP
 using HiGHS
 using LinearAlgebra
 using MLDatasets
+using MLUtils
 using Base.Iterators: partition
 using Statistics: mean
 using StaticBitSets
