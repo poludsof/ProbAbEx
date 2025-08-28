@@ -23,6 +23,7 @@ using DataStructures
 using Distributions
 using Random
 using ADTypes
+using NNlib: sigmoid
 const to = TimerOutput()
 
 struct Subset_minimal{NN, I, O, ID}
