@@ -147,16 +147,58 @@ function sample_and_save_png(ts::Lux.Training.TrainState, x, mask; binary=true, 
     img
 end
 
+function block_mask(dims=(28,28); top=12, left=10, h=10, w=10)
+    m = trues(dims...)
+    m[top:top+h-1, left:left+w-1] .= false
+    Float32.(vec(m))  # 1 where missing
+end
+
 x = load_binary_mnist_matrix()[:, 1:1]
 mask = generate_mask(size(x))
 path = sample_and_save_png(ts, x, mask; binary=true, path="impute.png")
-
+mask = block_mask()
 
 xhat = impute(ts, x, mask)
-show_image(xhat)
+display_image(x)
 
+sample_and_save(x, mask, ts)
 
+function sample_and_save(x, mask, ts; binary=true)
 
+    (logits, μq, logσq, μp, logσp), _ = Lux.apply(ts.model, (x, mask), ts.parameters, ts.states)
+    x_hat = σ.(logits)
+
+    grayscale_image = x_hat[:, 1] isa AbstractVector ? reshape(x_hat[:, 1], 28, 28) : x_hat
+    mask_image = mask[:, 1] isa AbstractVector ? reshape(mask[:, 1], 28, 28) : mask
+
+    if binary
+        grayscale_image .= ifelse.(grayscale_image .> 0.5, 1f0, 0f0)
+    end
+
+    color_image = Array{RGBf}(undef, 28, 28)
+
+    for i in 1:28, j in 1:28
+        if mask_image[i, j] == 1
+            # color_image[i, j] = RGBf(1, 0, 0)
+            if x[(j-1)*28 + i, 1] == 1
+                color_image[i, j] = RGBf(1, 0, 0)
+            else
+                color_image[i, j] = RGBf(0.5, 0, 0)
+            end
+        else
+            gray_val = clamp(grayscale_image[i, j], 0, 1)
+            color_image[i, j] = RGBf(gray_val, gray_val, gray_val)
+        end
+    end
+
+    fig = Figure(size = (400, 400))
+    ax = Axis(fig[1, 1], title = "Masked MNIST Reconstruction", yreversed = true, aspect = DataAspect())
+    image!(ax, color_image, interpolate = false)
+    hidespines!(ax)
+    hidedecorations!(ax)
+
+    fig
+end
 
 
 display_image(x_imp[:, 1])
@@ -179,25 +221,4 @@ function display_image(img)
     hidespines!(ax); hidedecorations!(ax)
 
     fig
-end
-
-function show_image(x; dims=(28,28), title::String="Image", savepath::Union{Nothing,String}=nothing, order::Symbol=:col, clamp01::Bool=true)
-    X = x isa AbstractVector ? reshape(Float32.(x), dims...) : (size(x) == dims ? Float32.(x) : reshape(Float32.(x), dims...))
-    if order === :row
-        X = permutedims(X, (2,1))
-    end
-    if clamp01
-        X = clamp.(X, 0f0, 1f0)
-    end
-    
-    fig = Figure(resolution=(320,320), fontsize=14)
-    ax = Axis(fig[1,1], title=title)
-    image!(ax, X); hidespines!(ax); hidedecorations!(ax, grid=false)
-    
-    if savepath !== nothing
-        save(savepath, fig)
-    end
-    
-    display(fig)
-    return fig
 end
