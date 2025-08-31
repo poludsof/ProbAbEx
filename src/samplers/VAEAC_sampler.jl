@@ -69,6 +69,8 @@ function Lux.apply(m::VAEAC, (x, mask), ps, st)
 end
 
 generate_mask(sz::Tuple{Int,Int}) = Float32.(rand(Bool, sz))
+generate_mask(sz::Tuple{Int}) = Float32.(rand(Bool, sz))
+
 
 function bce_with_logits_masked(logits, x, mask)
     w = 1f0 .- mask
@@ -125,7 +127,7 @@ function train(; epochs=20, lr=learning_rate)
 end
 
 
-ts = train()
+ts = train(epochs=10)
 
 
 function impute(ts::Lux.Training.TrainState, x, mask)
@@ -140,11 +142,20 @@ function sample_and_save_png(ts::Lux.Training.TrainState, x, mask; binary=true, 
     if binary
         g .= ifelse.(g .> 0.5f0, 1f0, 0f0)
     end
-    img = Array{RGB{Float32}}(undef, 28, 28)
-    @inbounds for i in 1:28, j in 1:28
-        img[i, j] = m[i, j] > 0.5f0 ? RGB(1, 0, 0) : RGB(g[i, j], g[i, j], g[i, j])
+    img = Array{RGBf}(undef, 28, 28)
+
+    for i in 1:28, j in 1:28
+        if m[i, j] == 1
+            img[i, j] = RGBf(0.5, 0, 0)
+            if x[(j-1)*28 + i, 1] == 0
+                img[i, j] = RGBf(1, 0, 0)
+            end
+        else
+            gray_val = clamp(g[i, j], 0, 1)
+            img[i, j] = RGBf(gray_val, gray_val, gray_val)
+        end
     end
-    img
+    reverse(Base.rotr90(img), dims=2)
 end
 
 function block_mask(dims=(28,28); top=12, left=10, h=10, w=10)
@@ -152,16 +163,6 @@ function block_mask(dims=(28,28); top=12, left=10, h=10, w=10)
     m[top:top+h-1, left:left+w-1] .= false
     Float32.(vec(m))  # 1 where missing
 end
-
-x = load_binary_mnist_matrix()[:, 1:1]
-mask = generate_mask(size(x))
-path = sample_and_save_png(ts, x, mask; binary=true, path="impute.png")
-mask = block_mask()
-
-xhat = impute(ts, x, mask)
-display_image(x)
-
-sample_and_save(x, mask, ts)
 
 function sample_and_save(x, mask, ts; binary=true)
 
@@ -179,11 +180,9 @@ function sample_and_save(x, mask, ts; binary=true)
 
     for i in 1:28, j in 1:28
         if mask_image[i, j] == 1
-            # color_image[i, j] = RGBf(1, 0, 0)
+            color_image[i, j] = RGBf(0.5, 0, 0)
             if x[(j-1)*28 + i, 1] == 1
                 color_image[i, j] = RGBf(1, 0, 0)
-            else
-                color_image[i, j] = RGBf(0.5, 0, 0)
             end
         else
             gray_val = clamp(grayscale_image[i, j], 0, 1)
@@ -201,24 +200,11 @@ function sample_and_save(x, mask, ts; binary=true)
 end
 
 
-display_image(x_imp[:, 1])
-show_image(p[:, 1])
+x = load_binary_mnist_matrix()[:, 2]
+mask = generate_mask(size(x))
+mask = block_mask()
 
-function display_image(img)
 
-    matrix_image = reshape(img[:, 1], 28, 28)
+x_img = sample_and_save_png(ts, x, mask; binary=false, path="impute.png")
 
-    # color_image = Array{RGBf}(undef, 28, 28)
-
-    # for i in 1:28, j in 1:28
-    #     gray_val = clamp(matrix_image[i, j], 0, 1)
-    #     color_image[i, j] = RGBf(gray_val, gray_val, gray_val)
-    # end
-
-    fig = Figure(size = (400, 400))
-    ax = Axis(fig[1, 1], title = "Masked MNIST Reconstruction", yreversed = true, aspect = DataAspect())
-    image!(ax, matrix_image, interpolate = false)
-    hidespines!(ax); hidedecorations!(ax)
-
-    fig
-end
+x_img2 = sample_and_save(x, mask, ts, binary=false)
