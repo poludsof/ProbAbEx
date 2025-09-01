@@ -127,7 +127,7 @@ function train(; epochs=20, lr=learning_rate)
 end
 
 
-ts = train(epochs=10)
+# ts = train(epochs=10)
 
 
 function impute(ts::Lux.Training.TrainState, x, mask)
@@ -200,11 +200,11 @@ function sample_and_save(x, mask, ts; binary=true)
 end
 
 
-x = load_binary_mnist_matrix()[:, 2]
-mask = generate_mask(size(x))
-mask = block_mask()
+# x = load_binary_mnist_matrix()[:, 2]
+# mask = generate_mask(size(x))
+# mask = block_mask()
 
 
-x_img = sample_and_save_png(ts, x, mask; binary=false, path="impute.png")
+# x_img = sample_and_save_png(ts, x, mask; binary=false, path="impute.png")
 
-x_img2 = sample_and_save(x, mask, ts, binary=false)
+# x_img2 = sample_and_save(x, mask, ts, binary=false)

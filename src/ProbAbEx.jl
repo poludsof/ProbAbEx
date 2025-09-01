@@ -17,12 +17,15 @@ using Optimisers
 using MLUtils: DataLoader
 using CairoMakie
 using Makie
-using Makie.Colors
+# using Makie.Colors
 using Serialization
 using DataStructures
 using Distributions
 using Random
 using ADTypes
+using FileIO
+using ImageTransformations
+using ImageCore
 using NNlib: sigmoid
 const to = TimerOutput()
 
@@ -53,6 +56,7 @@ include("samplers/mixture_sampler.jl")
 export BernoulliMixture
 export BatchHeuristic
 include("samplers/VAEAC_sampler.jl")
+include("datasets/celeba.jl")
 
 # export one_subset_backward_search, one_subset_forward_search, one_subset_beam_search
 # export preprocess_binary, preprocess_bin_neg, prepare_data

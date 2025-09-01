@@ -2,7 +2,7 @@
 
 julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "7533f0b8b855ede93988c4049c629caa5e732402"
+project_hash = "f59198ff14d7ef43f947cc73414e528cedc3ce79"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "60665b326b75db6517939d0e1875850bc4a54368"
@@ -474,6 +474,12 @@ git-tree-sha1 = "439e35b0b36e2e5881738abc8857bd92ad6ff9a8"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.3"
 
+[[deps.CoordinateTransformations]]
+deps = ["LinearAlgebra", "StaticArrays"]
+git-tree-sha1 = "a692f5e257d332de1e554e4566a4e5a8a72de2b2"
+uuid = "150eb455-5306-5404-9cee-2592286d6298"
+version = "0.6.4"
+
 [[deps.CpuId]]
 deps = ["Markdown"]
 git-tree-sha1 = "fcbb72b032692610bfbdb15018ac16a36cf2e406"
@@ -675,9 +681,9 @@ version = "0.3.2"
 
 [[deps.FileIO]]
 deps = ["Pkg", "Requires", "UUIDs"]
-git-tree-sha1 = "2dd20384bf8c6d411b5c7370865b1e9b26cb2ea3"
+git-tree-sha1 = "b66970a70db13f45b7e57fbda1736e1cf72174ea"
 uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
-version = "1.16.6"
+version = "1.17.0"
 weakdeps = ["HTTP"]
 
     [deps.FileIO.extensions]
@@ -1002,6 +1008,12 @@ deps = ["Base64", "ColorSchemes", "FileIO", "ImageBase", "ImageCore", "OffsetArr
 git-tree-sha1 = "3b5344bcdbdc11ad58f3b1956709b5b9345355de"
 uuid = "4e3cecfd-b093-5904-9786-8bbb286a6a31"
 version = "0.3.8"
+
+[[deps.ImageTransformations]]
+deps = ["AxisAlgorithms", "CoordinateTransformations", "ImageBase", "ImageCore", "Interpolations", "OffsetArrays", "Rotations", "StaticArrays"]
+git-tree-sha1 = "dfde81fafbe5d6516fb864dc79362c5c6b973c82"
+uuid = "02fcd773-0e25-5acc-982a-7f6622650795"
+version = "0.10.2"
 
 [[deps.Imath_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -2020,6 +2032,12 @@ version = "2.11.1"
     [deps.QuadGK.weakdeps]
     Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 
+[[deps.Quaternions]]
+deps = ["LinearAlgebra", "Random", "RealDot"]
+git-tree-sha1 = "994cc27cdacca10e68feb291673ec3a76aa2fae9"
+uuid = "94ee1d12-ae83-5a48-8b1c-48b8ff168ae0"
+version = "0.7.6"
+
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "StyledStrings", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
@@ -2101,6 +2119,18 @@ deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "58cdd8fb2201a6267e1db87ff148dd6c1dbd8ad8"
 uuid = "f50d1b31-88e8-58de-be2c-1cc44531875f"
 version = "0.5.1+0"
+
+[[deps.Rotations]]
+deps = ["LinearAlgebra", "Quaternions", "Random", "StaticArrays"]
+git-tree-sha1 = "5680a9276685d392c87407df00d57c9924d9f11e"
+uuid = "6038ab10-8711-5258-84ad-4b1120ba62dc"
+version = "1.7.1"
+
+    [deps.Rotations.extensions]
+    RotationsRecipesBaseExt = "RecipesBase"
+
+    [deps.Rotations.weakdeps]
+    RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 
 [[deps.RoundingEmulator]]
 git-tree-sha1 = "40b9edad2e5287e05bd413a38f61a8ff55b9557b"
