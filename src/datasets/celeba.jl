@@ -1,4 +1,4 @@
-function load_celeba_images(root::AbstractString; out_size=(64,64), limit::Union{Nothing,Int}=nothing, shuffle::Bool=true)
+function load_celeba_images(root::AbstractString; out_size=(32,32), limit::Union{Nothing,Int}=nothing, shuffle::Bool=true)
     
     files = filter(f -> endswith(lowercase(f), ".jpg") || endswith(lowercase(f), ".png"),
                    readdir(root; join=true))
@@ -32,22 +32,21 @@ function load_celeba_images(root::AbstractString; out_size=(64,64), limit::Union
 end
 
 # Each column of data is one image, flattened, with values in [0, 1]
-data = load_celeba_images("/home/poludsof/ProbAbEx/src/datasets/img_align_celeba", out_size=(32, 32), limit=1000, shuffle=true)
-data[1]
+# data = load_celeba_images("/home/poludsof/ProbAbEx/src/datasets/img_align_celeba", out_size=(32, 32), limit=1000, shuffle=true)
 
-H, W, C = 32, 32, 3
-k = 6
+# H, W, C = 32, 32, 3
+# k = 6
 
-size(data)
+# size(data)
 
-show_image_vec(data[:, k]; H=H, W=W, title="CelebA image $k", savepath="celeba_img_$k.png")
-show_image90(data[:, k]; H=H, W=W)
+# show_image_vec(data[:, k]; H=H, W=W, title="CelebA image $k", savepath="celeba_img_$k.png")
+# show_image90(data[:, k]; H=H, W=W)
 
-show_image90(x; H::Int, W::Int) = begin
-    img = colorview(RGB{Float32},
-                    permutedims(reshape(Float32.(x), H, W, 3), (3,1,2)))
-    display(img)
-end
+# show_image90(x; H::Int, W::Int) = begin
+#     img = colorview(RGB{Float32},
+#                     permutedims(reshape(Float32.(x), H, W, 3), (3,1,2)))
+#     display(img)
+# end
 
 function show_image_vec(x::AbstractVector; H::Int, W::Int, title::AbstractString="Image", savepath::Union{Nothing,String}=nothing)
     @assert length(x) == H*W*3
