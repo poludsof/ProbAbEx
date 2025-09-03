@@ -127,7 +127,11 @@ function train(; epochs=20, lr=learning_rate)
 end
 
 
-# ts = train(epochs=10)
+ts = train(epochs=20)
+
+
+
+
 
 
 function impute(ts::Lux.Training.TrainState, x, mask)
@@ -208,3 +212,44 @@ end
 # x_img = sample_and_save_png(ts, x, mask; binary=false, path="impute.png")
 
 # x_img2 = sample_and_save(x, mask, ts, binary=false)
+
+
+
+
+
+
+
+
+""" ================ Save and Load Model ================= """
+
+# BSON
+function save_vaeac(ts::Lux.Training.TrainState, path::AbstractString)
+    @save path model=ts.model ps=ts.parameters st=ts.states
+end
+
+function load_vaeac(path::AbstractString; lr=learning_rate)
+    d = load(path)
+    model = d[:model]
+    ps = d[:ps]
+    st = d[:st]
+    Lux.Training.TrainState(model, ps, st, Optimisers.Adam(lr))
+end
+
+save_vaeac(ts, "models/mnist_vaeac_model.bson")
+ts2 = load_vaeac("models/mnist_vaeac_model.bson"; lr=learning_rate)
+
+
+# JLS
+function save_vaeac_jls(ts::Lux.Training.TrainState, path::AbstractString)
+    open(path, "w") do io
+        serialize(io, (model=ts.model, ps=ts.parameters, st=ts.states))
+    end
+end
+
+function load_vaeac_jls(path::AbstractString; lr=learning_rate)
+    data = open(deserialize, path)
+    Lux.Training.TrainState(data.model, data.ps, data.st, Optimisers.Adam(lr))
+end
+
+save_vaeac_jls(ts, "models/mnist_vaeac_model.jls")
+ts2 = load_vaeac_jls("models/mnist_vaeac_model.jls"; lr=learning_rate)

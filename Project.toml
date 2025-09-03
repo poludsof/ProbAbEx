@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
@@ -44,6 +45,7 @@ CUDAExt = "CUDA"
 
 [compat]
 ADTypes = "1.17.0"
+BSON = "0.3.9"
 BenchmarkTools = "1.6.0"
 CSV = "0.10.15"
 CUDA = "5.6.0"

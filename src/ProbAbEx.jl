@@ -27,6 +27,8 @@ using FileIO
 using ImageTransformations
 using ImageCore
 using NNlib: sigmoid
+using BSON: @save, @load
+ 
 const to = TimerOutput()
 
 struct Subset_minimal{NN, I, O, ID}
