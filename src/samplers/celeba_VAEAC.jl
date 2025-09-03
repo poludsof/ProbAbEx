@@ -65,32 +65,30 @@ end
 
 function load_celeba_images(root::AbstractString; out_size=(32,32), limit::Union{Nothing,Int}=nothing, shuffle::Bool=true)
     
-    files = filter(f -> endswith(lowercase(f), ".jpg") || endswith(lowercase(f), ".png"),
-                   readdir(root; join=true))
-                   
+    files = filter(f -> endswith(lowercase(f), ".jpg") || endswith(lowercase(f), ".png"), readdir(root; join=true))
     shuffle && Random.shuffle!(files)
-
     limit !== nothing && (files = files[1:limit])
 
-    H, W = out_size; C = 3; D = H*W*C
+    H, W = out_size
+    C = 3 # RGB
+    D = H*W*C
     X = Array{Float32}(undef, D, length(files))
 
     for (i, fp) in enumerate(files)
-        img = load(fp)                  # could be H×W Colorant, or H×W×C numeric
-        img = RGB.(img)                 # ensure 2-D Colorant array H×W
+        img = load(fp)
+        img = RGB.(img)
 
-        # center crop to square on the *first two* dims
+        # center crop to square
         H0, W0 = size(img, 1), size(img, 2)
         s = min(H0, W0)
         top  = (H0 - s) ÷ 2 + 1
         left = (W0 - s) ÷ 2 + 1
-        cropped = @view img[top:top+s-1, left:left+s-1]   # <-- no third-dim index
+        cropped = @view img[top:top+s-1, left:left+s-1]
 
-        # resize the 2-D Colorant array
-        img_res = ImageTransformations.imresize(cropped, (H, W))  # H×W Colorant
+        # resize the 2-D array
+        img_res = ImageTransformations.imresize(cropped, (H, W))
 
-        # to H×W×C Float32 then flatten to D
-        HWC = Float32.(permutedims(channelview(img_res), (2,3,1)))  # H×W×C, Float32 in [0,1]
+        HWC = Float32.(permutedims(channelview(img_res), (2,3,1)))
         X[:, i] = reshape(HWC, D)
     end
     return X
@@ -116,7 +114,7 @@ function rect_mask_batch(H, W, C, B; min_area_frac=0.25)
         vec(Float32.(repeat(rand_rect_mask(H, W; min_area_frac=min_area_frac), 1, 1, C)))
         for _ in 1:B
     ]
-    hcat(cols...)  # (H*W*C, B)
+    hcat(cols...) # (H*W*C, B)
 end
 
 function mse_on_missing(pred, x, mask)

@@ -52,6 +52,7 @@ Lux.initialstates(rng::AbstractRNG, m::VAEAC) = (
     decoder  = Lux.initialstates(rng, m.decoder),
 )
 
+# like forward pass
 function Lux.apply(m::VAEAC, (x, mask), ps, st)
     x_masked = x .* mask
     xb = vcat(x_masked, mask)
