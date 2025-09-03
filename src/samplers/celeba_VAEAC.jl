@@ -171,8 +171,8 @@ function train_celeba(root::AbstractString; out_size=(Hc, Wc), limit=nothing, ep
 end
 
 
-pathway = "/home/poludsof/ProbAbEx/src/datasets/img_align_celeba"
-ts = train_celeba(pathway; out_size=(32, 32), limit=100, epochs=10, lr = 0.001f0)
+# pathway = "/home/poludsof/ProbAbEx/src/datasets/img_align_celeba"
+# ts = train_celeba(pathway; out_size=(32, 32), limit=100, epochs=10, lr = 0.001f0)
 
 function impute_celeba(ts::Lux.Training.TrainState, x, mask)
     x = to_flat(x)

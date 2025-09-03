@@ -127,7 +127,7 @@ function train(; epochs=20, lr=learning_rate)
 end
 
 
-ts = train(epochs=20)
+# ts = train(epochs=10)
 
 
 
@@ -151,7 +151,7 @@ function sample_and_save_png(ts::Lux.Training.TrainState, x, mask; binary=true, 
     for i in 1:28, j in 1:28
         if m[i, j] == 1
             img[i, j] = RGBf(0.5, 0, 0)
-            if x[(j-1)*28 + i, 1] == 0
+            if x[(j-1)*28 + i, 1] == 1
                 img[i, j] = RGBf(1, 0, 0)
             end
         else
@@ -167,6 +167,8 @@ function block_mask(dims=(28,28); top=12, left=10, h=10, w=10)
     m[top:top+h-1, left:left+w-1] .= false
     Float32.(vec(m))  # 1 where missing
 end
+
+random_mask(n; D=784, rng=Random.default_rng()) = (m = falses(D); m[view(randperm(rng, D), 1:n)] .= true; m )
 
 function sample_and_save(x, mask, ts; binary=true)
 
@@ -204,14 +206,13 @@ function sample_and_save(x, mask, ts; binary=true)
 end
 
 
-# x = load_binary_mnist_matrix()[:, 2]
-# mask = generate_mask(size(x))
-# mask = block_mask()
+x = load_binary_mnist_matrix()[:, 2]
+mask = block_mask()
+mask = random_mask(40; D=784)
 
+x_img = sample_and_save_png(ts2, x, mask; binary=false, path="impute.png")
 
-# x_img = sample_and_save_png(ts, x, mask; binary=false, path="impute.png")
-
-# x_img2 = sample_and_save(x, mask, ts, binary=false)
+x_img2 = sample_and_save(x, mask, ts2, binary=true)
 
 
 
@@ -235,7 +236,7 @@ function load_vaeac(path::AbstractString; lr=learning_rate)
     Lux.Training.TrainState(model, ps, st, Optimisers.Adam(lr))
 end
 
-save_vaeac(ts, "models/mnist_vaeac_model.bson")
+# save_vaeac(ts, "models/mnist_vaeac_model.bson")
 ts2 = load_vaeac("models/mnist_vaeac_model.bson"; lr=learning_rate)
 
 
@@ -251,5 +252,5 @@ function load_vaeac_jls(path::AbstractString; lr=learning_rate)
     Lux.Training.TrainState(data.model, data.ps, data.st, Optimisers.Adam(lr))
 end
 
-save_vaeac_jls(ts, "models/mnist_vaeac_model.jls")
-ts2 = load_vaeac_jls("models/mnist_vaeac_model.jls"; lr=learning_rate)
+# save_vaeac_jls(ts, "models/mnist_vaeac_model.jls")
+# ts2 = load_vaeac_jls("models/mnist_vaeac_model.jls"; lr=learning_rate)
