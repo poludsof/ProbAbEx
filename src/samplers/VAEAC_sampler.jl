@@ -21,6 +21,7 @@ struct VAEAC{P,Q,D} <: Lux.AbstractLuxLayer
     ldim::Int
 end
 
+#!
 function VAEAC(idim::Int, ldim::Int, h::Int)
     proposal = Lux.Chain(
         Lux.Dense(2idim => h, relu),
@@ -69,9 +70,11 @@ function Lux.apply(m::VAEAC, (x, mask), ps, st)
     return (logits, μq, logσq, μp, logσp), (proposal=st_prop, prior=st_prior, decoder=st_dec)
 end
 
-generate_mask(sz::Tuple{Int,Int}) = Float32.(rand(Bool, sz))
-generate_mask(sz::Tuple{Int}) = Float32.(rand(Bool, sz))
+#!
+generate_mask(sz::Tuple{Int,Int}) = rand(Float32, sz) .> rand()
+generate_mask(sz::Tuple{Int,Int,Int}) = rand(Float32, sz) .> rand(1,1,size(sz,3))
 
+generate_mask(sz::Tuple{Int,Int}) = Float32.(rand(Bool, sz))
 
 function bce_with_logits_masked(logits, x, mask)
     w = 1f0 .- mask
@@ -87,8 +90,7 @@ function kl_diag_gaussians(μq, logσq, μp, logσp)
     0.5f0 * sum(t) / size(μq, 2)
 end
 
-function loss_fn(model, ps, st, x)
-    mask = generate_mask(size(x))
+function loss_fn(model, ps, st, (x, mask))
     (logits, μq, logσq, μp, logσp), st2 = Lux.apply(model, (x, mask), ps, st)
     recon = bce_with_logits_masked(logits, x, mask)
     kl = kl_diag_gaussians(μq, logσq, μp, logσp)
@@ -116,8 +118,9 @@ function train(; epochs=20, lr=learning_rate)
         tot = 0f0
         nb = 0
         for xb in loader
+            mask = generate_mask(size(xb))
             gs, loss, stats, ts = Lux.Training.compute_gradients(
-                Lux.Training.AutoZygote(), loss_fn, xb, ts)
+                Lux.Training.AutoZygote(), loss_fn, (xb, mask), ts)
             ts = Lux.Training.apply_gradients(ts, gs)
             tot += loss
             nb += 1
@@ -209,11 +212,11 @@ end
 
 x = load_binary_mnist_matrix()[:, 2]
 mask = block_mask()
-mask = random_mask(40; D=784)
+mask = random_mask(100; D=784)
 
-x_img = sample_and_save_png(ts2, x, mask; binary=false, path="impute.png")
+x_img = sample_and_save_png(ts2, x, mask; binary=true, path="impute.png")
 
-x_img2 = sample_and_save(x, mask, ts2, binary=true)
+x_img2 = sample_and_save(x, mask, ts2, binary=false)
 
 
 

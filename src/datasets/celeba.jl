@@ -30,15 +30,15 @@ function load_celeba_images(root::AbstractString; out_size=(32,32), limit::Union
     return X
 end
 
-data = load_celeba_images("src/datasets/img_align_celeba", out_size=(32, 32), limit=1000, shuffle=false)
-
 H, W, C = 32, 32, 3
-k = 6
+data = load_celeba_images("src/datasets/img_align_celeba", out_size=(H, W), limit=1000, shuffle=false)
+
+k = 8
 
 # size(data)
 
-# show_image_vec(data[:, k]; H=H, W=W, title="CelebA image $k", savepath="celeba_img_$k.png")
-# show_image90(data[:, k]; H=H, W=W)
+show_image_vec(data[:, k]; H=H, W=W, title="CelebA image $k", savepath="celeba_img_$k.png")
+show_image90(data[:, k]; H=H, W=W)
 
 show_image90(x; H::Int, W::Int) = begin
     img = colorview(RGB{Float32}, permutedims(reshape(Float32.(x), H, W, 3), (3,1,2)))
