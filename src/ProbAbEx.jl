@@ -28,7 +28,9 @@ using ImageTransformations
 using ImageCore
 using NNlib: sigmoid
 using BSON: @save, @load
- 
+using Reactant
+using Reactant_jll
+
 const to = TimerOutput()
 
 struct Subset_minimal{NN, I, O, ID}
@@ -52,14 +54,16 @@ include("dataset_prep.jl")
 include("heuristic.jl")
 include("utilities.jl")
 include("heuristics_criteria.jl")
-include("samplers/uniform_sampler.jl")
+
 export UniformDistribution
-include("samplers/mixture_sampler.jl")
 export BernoulliMixture
 export BatchHeuristic
+include("samplers/uniform_sampler.jl")
+include("samplers/mixture_sampler.jl")
 include("samplers/VAEAC_sampler.jl")
+# include("samplers/celeba_VAEAC.jl")
+
 include("datasets/celeba.jl")
-include("samplers/celeba_VAEAC.jl")
 
 # export one_subset_backward_search, one_subset_forward_search, one_subset_beam_search
 # export preprocess_binary, preprocess_bin_neg, prepare_data

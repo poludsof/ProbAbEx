@@ -1,17 +1,13 @@
 
-import ProbAbEx as PAE
-import Lux: initialparameters, initialstates
+# import ProbAbEx as PAE
+# import Lux: initialparameters, initialstates
 # todo: GPU, Reactant.jl
 # todo: IWAE
 
-# ========= Hyperparameters =========
-
+""" ========= Hyperparameters ========= """
 const input_dim = 28 * 28
 const latent_dim = 20
 const hidden_dim = 400
-const batch_size = 100
-const epochs = 20
-const learning_rate = 0.001f0
 
 struct VAEAC{P,Q,D} <: Lux.AbstractLuxLayer
     proposal::P
@@ -70,11 +66,8 @@ function Lux.apply(m::VAEAC, (x, mask), ps, st)
     return (logits, μq, logσq, μp, logσp), (proposal=st_prop, prior=st_prior, decoder=st_dec)
 end
 
-#!
 generate_mask(sz::Tuple{Int,Int}) = rand(Float32, sz) .> rand()
 generate_mask(sz::Tuple{Int,Int,Int}) = rand(Float32, sz) .> rand(1,1,size(sz,3))
-
-generate_mask(sz::Tuple{Int,Int}) = Float32.(rand(Bool, sz))
 
 function bce_with_logits_masked(logits, x, mask)
     w = 1f0 .- mask
@@ -107,7 +100,7 @@ function make_loader(x; batchsize=batch_size, shuffle=true)
     DataLoader(x; batchsize=batchsize, shuffle=shuffle)
 end
 
-function train(; epochs=20, lr=learning_rate)
+function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
     model = VAEAC(input_dim, latent_dim, hidden_dim)
     rng = Random.default_rng()
     ps, st = Lux.setup(rng, model)
@@ -131,12 +124,14 @@ function train(; epochs=20, lr=learning_rate)
 end
 
 
-# ts = train(epochs=10)
+Reactant.set_default_backend("gpu")
+dev = reactant_device()
 
 
 
 
 
+""" ================ Imputation and Sampling ================= """
 
 function impute(ts::Lux.Training.TrainState, x, mask)
     (logits, μq, logσq, μp, logσp), _ = Lux.apply(ts.model, (x, mask), ts.parameters, ts.states)
@@ -210,17 +205,6 @@ function sample_and_save(x, mask, ts; binary=true)
 end
 
 
-x = load_binary_mnist_matrix()[:, 2]
-mask = block_mask()
-mask = random_mask(100; D=784)
-
-x_img = sample_and_save_png(ts2, x, mask; binary=true, path="impute.png")
-
-x_img2 = sample_and_save(x, mask, ts2, binary=false)
-
-
-
-
 
 
 
@@ -240,8 +224,6 @@ function load_vaeac(path::AbstractString; lr=learning_rate)
     Lux.Training.TrainState(model, ps, st, Optimisers.Adam(lr))
 end
 
-# save_vaeac(ts, "models/mnist_vaeac_model.bson")
-ts2 = load_vaeac("models/mnist_vaeac_model.bson"; lr=learning_rate)
 
 
 # JLS
@@ -255,6 +237,3 @@ function load_vaeac_jls(path::AbstractString; lr=learning_rate)
     data = open(deserialize, path)
     Lux.Training.TrainState(data.model, data.ps, data.st, Optimisers.Adam(lr))
 end
-
-# save_vaeac_jls(ts, "models/mnist_vaeac_model.jls")
-# ts2 = load_vaeac_jls("models/mnist_vaeac_model.jls"; lr=learning_rate)
