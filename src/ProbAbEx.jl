@@ -29,7 +29,10 @@ using ImageCore
 using NNlib: sigmoid
 using BSON: @save, @load
 using Reactant
-using Reactant_jll
+# using Reactant_jll
+using Enzyme
+# using MLDataDevices: cpu_device
+using GPUArrays
 
 const to = TimerOutput()
 
