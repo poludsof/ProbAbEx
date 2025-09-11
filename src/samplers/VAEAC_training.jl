@@ -45,22 +45,18 @@ Lux.initialstates(rng::AbstractRNG, m::VAEAC) = (
     decoder  = Lux.initialstates(rng, m.decoder),
 )
 
-# like forward pass
 function Lux.apply(m::VAEAC, (x, mask, ε), ps, st)
     x_masked = x .* mask
     xb = vcat(x_masked, mask)
 
     prop_out, st_prop = Lux.apply(m.proposal, xb, ps.proposal, st.proposal)
     μq = @view prop_out[1:m.ldim, :]
-    # logσq = @view prop_out[m.ldim+1:end, :]
     logσq = clamp.(prop_out[m.ldim+1:end, :], -10f0, 10f0 )
 
-    # ε = randn(Float32, size(μq))
     z = μq .+ exp.(logσq) .* ε
 
     prior_out, st_prior = Lux.apply(m.prior, mask, ps.prior, st.prior)
     μp = @view prior_out[1:m.ldim, :]
-    # logσp = @view prior_out[m.ldim+1:end, :]
     logσp = clamp.(prior_out[m.ldim+1:end, :], -10f0, 10f0 )
     dec_in = vcat(z, mask)
 
@@ -101,7 +97,6 @@ end
 
 make_loader(x; batchsize=128, shuffle=true) = DataLoader(x; batchsize, shuffle)
 
-debug_data = nothing
 function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
     model = VAEAC(input_dim, latent_dim, hidden_dim)
     ps, st = Lux.setup(Random.default_rng(), model)
@@ -116,8 +111,7 @@ function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
     loader = make_loader(data; batchsize=batch_size, shuffle=true)
     loader_dev = DeviceIterator(dev, loader)
 
-    opt = Optimisers.Descent(lr)  
-    # opt = Optimisers.Adam(lr)
+    opt = Optimisers.Adam(lr)
     ts = Lux.Training.TrainState(model, ps, st, opt)
 
     for epoch in 1:epochs
@@ -127,10 +121,7 @@ function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
             mask = Float32.(generate_mask(size(xb))) |> dev
             ε = randn(Float32, latent_dim, size(xb, 2)) |> dev
 
-            debug_data = deepcopy((model,ps, st, mask, ε))
             _, loss, _, ts = Lux.Training.single_train_step!(Lux.AutoEnzyme(), loss_fn, (xb, mask, ε), ts)
-            @show loss
-            isnan(loss) && error("NaN loss encountered")
             tot += loss
             nb += 1
         end
@@ -140,4 +131,4 @@ function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
 end
 
 #! fix batch size
-ts = train_vaeac(epochs=10, lr=0.001f0, batch_size=100)
+# ts = train_vaeac(epochs=5, lr=0.001f0, batch_size=100)
