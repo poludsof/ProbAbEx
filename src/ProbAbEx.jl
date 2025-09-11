@@ -66,6 +66,4 @@ include("samplers/VAEAC_sampler.jl")
 
 # include("datasets/celeba.jl")
 
-# export one_subset_backward_search, one_subset_forward_search, one_subset_beam_search
-
 end

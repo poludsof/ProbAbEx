@@ -107,7 +107,7 @@ function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
     ps = ps |> dev
     st = st |> dev
 
-    data = load_binary_mnist_matrix() #|> dev
+    data = load_binary_mnist_matrix()
     loader = make_loader(data; batchsize=batch_size, shuffle=true)
     loader_dev = DeviceIterator(dev, loader)
 
@@ -129,6 +129,3 @@ function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
     end
     return ts
 end
-
-#! fix batch size
-# ts = train_vaeac(epochs=5, lr=0.001f0, batch_size=100)

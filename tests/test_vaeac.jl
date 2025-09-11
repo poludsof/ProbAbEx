@@ -92,8 +92,6 @@ function load_vaeac(path::AbstractString; lr=learning_rate)
     Lux.Training.TrainState(model, ps, st, Optimisers.Adam(lr))
 end
 
-
-
 # JLS
 function save_vaeac_jls(ts::Lux.Training.TrainState, path::AbstractString)
     open(path, "w") do io
@@ -111,7 +109,6 @@ end
 
 """ ========= Create and train model ========= """
 ts = PAE.train_vaeac(epochs=15, lr=0.001f0, batch_size=100)
-
 
 
 
