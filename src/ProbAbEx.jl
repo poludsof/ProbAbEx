@@ -26,12 +26,13 @@ using Random
 # using FileIO
 # using ImageTransformations
 # using ImageCore
-# using NNlib: sigmoid
+using NNlib
 using Reactant
 # using Reactant_jll
 # using Functors
 using Enzyme
 using Revise
+using ColorTypes
 
 # const to = TimerOutput()
 

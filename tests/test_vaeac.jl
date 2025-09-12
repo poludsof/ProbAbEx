@@ -1,16 +1,10 @@
 import ProbAbEx as PAE
-using ProbAbEx
-using Lux
+using Serialization, Random, Optimisers, Lux, Base, ColorTypes, NNlib
+using FileIO, CairoMakie
 using BSON: @save, @load
-using Serialization
-using Base
-using FileIO
-using Random
-using Optimisers
-# using ProbAbEx.Makie
+
 
 """ ================ Imputation and Sampling ================= """
-
 function impute(ts::Lux.Training.TrainState, x, mask)
     ldim = getfield(ts.model, :ldim)
     ε = randn(Float32, ldim, size(x, 2))
@@ -25,33 +19,27 @@ function sample_and_save_png(ts::Lux.Training.TrainState, x, mask; binary=true, 
     if binary
         g .= ifelse.(g .> 0.5f0, 1f0, 0f0)
     end
-    img = Array{RGBf}(undef, 28, 28)
+    img = Array{RGB{Float32}}(undef, 28, 28)
 
     for i in 1:28, j in 1:28
         if m[i, j] == 1
-            img[i, j] = RGBf(0.5, 0, 0)
+            img[i, j] = RGB{Float32}(0.5, 0, 0)
             if x[(j-1)*28 + i, 1] == 1
-                img[i, j] = RGBf(1, 0, 0)
+                img[i, j] = RGB{Float32}(1, 0, 0)
             end
         else
             gray_val = clamp(g[i, j], 0, 1)
-            img[i, j] = RGBf(gray_val, gray_val, gray_val)
+            img[i, j] = RGB{Float32}(gray_val, gray_val, gray_val)
         end
     end
-    reverse(Base.rotr90(img), dims=2)
-end
-
-function block_mask(dims=(28,28); top=12, left=10, h=10, w=10)
-    m = trues(dims...)
-    m[top:top+h-1, left:left+w-1] .= false
-    Float32.(vec(m))  # 1 where missing
+    display(reverse(Base.rotr90(img), dims=2))
 end
 
 random_mask(n; D=784, rng=Random.default_rng()) = (m = falses(D); m[view(randperm(rng, D), 1:n)] .= true; m )
 
 function sample_and_save(x, mask, ts; binary=true)
-
-    (logits, μq, logσq, μp, logσp), _ = Lux.apply(ts.model, (x, mask), ts.parameters, ts.states)
+    ε = randn(Float32, getfield(ts.model, :ldim), size(x, 2))
+    (logits, μq, logσq, μp, logσp), _ = Lux.apply(ts.model, (x, mask, ε), ts.parameters, ts.states)
     x_hat = σ.(logits)
 
     grayscale_image = x_hat[:, 1] isa AbstractVector ? reshape(x_hat[:, 1], 28, 28) : x_hat
@@ -61,17 +49,17 @@ function sample_and_save(x, mask, ts; binary=true)
         grayscale_image .= ifelse.(grayscale_image .> 0.5, 1f0, 0f0)
     end
 
-    color_image = Array{RGBf}(undef, 28, 28)
+    color_image = Array{RGB{Float32}}(undef, 28, 28)
 
     for i in 1:28, j in 1:28
         if mask_image[i, j] == 1
-            color_image[i, j] = RGBf(0.5, 0, 0)
+            color_image[i, j] = RGB{Float32}(0.5, 0, 0)
             if x[(j-1)*28 + i, 1] == 1
-                color_image[i, j] = RGBf(1, 0, 0)
+                color_image[i, j] = RGB{Float32}(1, 0, 0)
             end
         else
             gray_val = clamp(grayscale_image[i, j], 0, 1)
-            color_image[i, j] = RGBf(gray_val, gray_val, gray_val)
+            color_image[i, j] = RGB{Float32}(gray_val, gray_val, gray_val)
         end
     end
 
@@ -87,7 +75,6 @@ end
 
 
 """ ================ Save and Load Model ================= """
-
 # BSON
 function save_vaeac(ts::Lux.Training.TrainState, path::AbstractString)
     @save path model=ts.model ps=ts.parameters st=ts.states
@@ -117,26 +104,25 @@ end
 
 
 """ ========= Create and train model ========= """
-# ts = PAE.train_vaeac(epochs=15, lr=0.001f0, batch_size=100)
+ts = PAE.train_vaeac(epochs=20, lr=0.01f0, batch_size=150)
 
 
 
 """ ================ Imputation and Sampling ================= """
 x = PAE.load_binary_mnist_matrix()[:, 2]
-mask = block_mask()
 mask = random_mask(5; D=784)
 
-x_img = sample_and_save_png(ts2, x, mask; binary=true)
 
+x_img = sample_and_save_png(ts2, x, mask; binary=true)
 x_img2 = sample_and_save(x, mask, ts2, binary=true)
 
 
 
 """ ================ Save and Load Model ================= """
 
-# save_vaeac_jls(ts, "models/mnist_vaeac_model_20.jls")
-ts2 = load_vaeac_jls("models/mnist_vaeac_model_20.jls"; lr=0.001f0)
+save_vaeac_jls(ts, "models/mnist_vaeac_model_50.jls")
+ts2 = load_vaeac_jls("models/mnist_vaeac_model_50.jls"; lr=0.001f0)
 
 
-# save_vaeac(ts, "models/mnist_vaeac_model_20.bson")
-ts2 = load_vaeac("models/mnist_vaeac_model_20.bson"; lr=0.001f0)
+save_vaeac(ts, "models/mnist_vaeac_model_50.bson")
+ts2 = load_vaeac("models/mnist_vaeac_model_50.bson"; lr=0.001f0)

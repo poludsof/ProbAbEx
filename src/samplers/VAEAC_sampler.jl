@@ -47,16 +47,14 @@ end
     copied
 """
 function sample_all!(u, r::ConditionedVAEAC)
-    D = length(r.xₛ)
+    mk = r.mask
     n = size(u, 2)
-    size(u, 1) == D || error("dimension of u does not match the dimension of the sampler")
+    size(u, 1) == length(mask) || error("dimension of u does not match the dimension of the sampler")
 
-    mk = r.mask                      # Vector{Bool}, true = known
-    X  = repeat(reshape(Float32.(r.xₛ), D, 1), 1, n)
-    M  = repeat(reshape(Float32.(mk),    D, 1), 1, n)   # Float32 mask matrix for model
+    X  = repeat(reshape(Float32.(r.xₛ), length(r.xₛ), 1), 1, n)
+    M  = repeat(reshape(Float32.(mk), length(r.xₛ), 1), 1, n)
 
-    p = impute!(r.r.model, r.r.ps, r.r.st, X, M)        # D×n probabilities
-
+    x_hat = impute!(r.r.model, r.r.ps, r.r.st, X, M)
     # @inbounds for j in 1:n
     #     for i in 1:D
     #         if mk[i]
@@ -67,7 +65,7 @@ function sample_all!(u, r::ConditionedVAEAC)
     #     end
     # end
     # return u
-    p .= ifelse.(p .> 0.5f0, 1, -1)
+    x_hat .= ifelse.(x_hat .> 0.5f0, 1, -1)
 end
 
 function impute!(model, ps, st, x::AbstractMatrix, m::AbstractMatrix)
@@ -77,14 +75,34 @@ function impute!(model, ps, st, x::AbstractMatrix, m::AbstractMatrix)
     return σ.(logits)
 end
 
-sampler = VAEACSampler(deserialize("models/mnist_vaeac_model_20.jls"))
 
-x = load_binary_mnist_matrix()[:, 2]
-random_mask(n; D=784, rng=Random.default_rng()) = (m = falses(D); m[view(randperm(rng, D), 1:n)] .= true; m )
-mask = random_mask(5; D=784)
+""" Example usage: """ #! todo: delete
 
-#BitVector to Vector{Bool}:
-mask = collect(mask)
+# sampler = VAEACSampler(deserialize("models/mnist_vaeac_model_20.jls"))
 
-r = condition(sampler, x, mask)
-u = sample_all(r, 10)
+# x = load_binary_mnist_matrix()[:, 2]
+# random_mask(n; D=784, rng=Random.default_rng()) = (m = falses(D); m[view(randperm(rng, D), 1:n)] .= true; m )
+# mask = random_mask(30; D=784)
+# mask = collect(mask)
+# N = 10
+# r = condition(sampler, x, mask)
+# u = sample_all(r, N)
+
+# for i_sample in 1:N
+#     g = reshape(u[:, i_sample], 28, 28)
+#     m = reshape(mask[:, 1], 28, 28)
+#     img = Array{RGB{Float32}}(undef, 28, 28)
+
+#     for i in 1:28, j in 1:28
+#         if m[i, j] == 1
+#             img[i, j] = RGB{Float32}(0.5, 0, 0)
+#             if x[(j-1)*28 + i, 1] == 1
+#                 img[i, j] = RGB{Float32}(1, 0, 0)
+#             end
+#         else
+#             gray_val = clamp(g[i, j], 0, 1)
+#             img[i, j] = RGB{Float32}(gray_val, gray_val, gray_val)
+#         end
+#     end
+#     display(reverse(Base.rotr90(img), dims=2))
+# end

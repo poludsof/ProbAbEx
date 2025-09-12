@@ -1,18 +1,4 @@
-using StatsBase
 
-"""
-struct BernoulliMixture{T<:Real} <: AbstractSampler
-    log_p::Array{T, 3}
-    p::Matrix{T}
-end
-
-Implements BernoulliMixture with uniform weights.
-`log_p` holds logarithms (`logsoftmax`) of probabilities 
-(the third dimension is probability of one and zero, i.e. `size(log_p,3)=2`),
-which simplifies the conditioning, which is crucial operation.
-
-The conditioning is
-"""
 struct UniformDistribution
 end
 
