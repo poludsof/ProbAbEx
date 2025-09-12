@@ -1,10 +1,19 @@
-import ProbAbEx as PAE
+import .ProbAbEx as PAE
+using .ProbAbEx
+using Lux
+using BSON: @save, @load
+using Serialization
+using Base
+using FileIO
+using Random
+using Optimisers
 
 
 """ ================ Imputation and Sampling ================= """
 
 function impute(ts::Lux.Training.TrainState, x, mask)
-    ε = randn(Float32, latent_dim, size(x, 2))
+    ldim = getfield(ts.model, :ldim)
+    ε = randn(Float32, ldim, size(x, 2))
     (logits, μq, logσq, μp, logσp), _ = Lux.apply(ts.model, (x, mask, ε), ts.parameters, ts.states)
     σ.(logits)
 end
@@ -108,7 +117,7 @@ end
 
 
 """ ========= Create and train model ========= """
-ts = PAE.train_vaeac(epochs=15, lr=0.001f0, batch_size=100)
+# ts = PAE.train_vaeac(epochs=15, lr=0.001f0, batch_size=100)
 
 
 
@@ -117,17 +126,17 @@ x = PAE.load_binary_mnist_matrix()[:, 2]
 mask = block_mask()
 mask = random_mask(5; D=784)
 
-x_img = sample_and_save_png(ts2, x, mask; binary=true)
+# x_img = sample_and_save_png(ts2, x, mask; binary=true)
 
-x_img2 = sample_and_save(x, mask, ts2, binary=true)
+# x_img2 = sample_and_save(x, mask, ts2, binary=true)
 
 
 
 """ ================ Save and Load Model ================= """
 
-save_vaeac_jls(ts, "models/mnist_vaeac_model_20.jls")
+# save_vaeac_jls(ts, "models/mnist_vaeac_model_20.jls")
 ts2 = load_vaeac_jls("models/mnist_vaeac_model_20.jls"; lr=0.001f0)
 
 
-save_vaeac(ts, "models/mnist_vaeac_model_20.bson")
+# save_vaeac(ts, "models/mnist_vaeac_model_20.bson")
 ts2 = load_vaeac("models/mnist_vaeac_model_20.bson"; lr=0.001f0)

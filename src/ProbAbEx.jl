@@ -12,12 +12,13 @@ using MLUtils
 using Base.Iterators: partition
 using Statistics
 using StaticBitSets
+using Base
 # using TimerOutputs
 using Optimisers
 # using CairoMakie
 # using Makie
 # using Makie.Colors
-# using Serialization
+using Serialization
 # using DataStructures
 # using Distributions
 using Random
@@ -30,6 +31,7 @@ using Reactant
 # using Reactant_jll
 # using Functors
 using Enzyme
+using Revise
 
 # const to = TimerOutput()
 
