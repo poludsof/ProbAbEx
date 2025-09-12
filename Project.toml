@@ -1,3 +1,8 @@
+name = "ProbAbEx"
+uuid = "617967a3-e185-4e1a-ad46-feef785cd8a4"
+authors = ["Sofia Poludina <poludsof@fel.cvut.cz>"]
+version = "0.1.0"
+
 [deps]
 BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"

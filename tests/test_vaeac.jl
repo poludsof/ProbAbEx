@@ -1,5 +1,5 @@
-import .ProbAbEx as PAE
-using .ProbAbEx
+import ProbAbEx as PAE
+using ProbAbEx
 using Lux
 using BSON: @save, @load
 using Serialization
@@ -7,7 +7,7 @@ using Base
 using FileIO
 using Random
 using Optimisers
-
+# using ProbAbEx.Makie
 
 """ ================ Imputation and Sampling ================= """
 
@@ -126,9 +126,9 @@ x = PAE.load_binary_mnist_matrix()[:, 2]
 mask = block_mask()
 mask = random_mask(5; D=784)
 
-# x_img = sample_and_save_png(ts2, x, mask; binary=true)
+x_img = sample_and_save_png(ts2, x, mask; binary=true)
 
-# x_img2 = sample_and_save(x, mask, ts2, binary=true)
+x_img2 = sample_and_save(x, mask, ts2, binary=true)
 
 
 

@@ -6,7 +6,7 @@ struct VAEACSampler{M,P,S}
 end
 
 function VAEACSampler(train_state)
-    model, ps, st = train_state.model, train_state.parameters, train_state.states
+    model, ps, st = train_state.model, train_state.ps, train_state.st
     VAEACSampler(model, ps, st)
 end
 
@@ -22,6 +22,10 @@ function condition(r::VAEACSampler, xₛ, known_ii::SBitSet)
     for i in known_ii
         mask[i] = true
     end
+    ConditionedVAEAC(r, xₛ, mask)
+end
+
+function condition(r::VAEACSampler, xₛ, mask::Vector{Bool})
     ConditionedVAEAC(r, xₛ, mask)
 end
 
@@ -43,33 +47,44 @@ end
     copied
 """
 function sample_all!(u, r::ConditionedVAEAC)
+    D = length(r.xₛ)
     n = size(u, 2)
-    size(u, 1) == length(mask) || error("dimension of u does not match the dimension of the sampler")
+    size(u, 1) == D || error("dimension of u does not match the dimension of the sampler")
 
-    m = r.mask
-    x  = repeat(reshape(Float32.(r.xₛ), length(r.xₛ), 1), 1, n)
-    Mcol = Float32.(mk)
-    m  = repeat(reshape(Mcol, length(r.xₛ), 1), 1, n)
+    mk = r.mask                      # Vector{Bool}, true = known
+    X  = repeat(reshape(Float32.(r.xₛ), D, 1), 1, n)
+    M  = repeat(reshape(Float32.(mk),    D, 1), 1, n)   # Float32 mask matrix for model
 
-    p = impute!(r.r.model, r.r.ps, r.r.st, X, M)
+    p = impute!(r.r.model, r.r.ps, r.r.st, X, M)        # D×n probabilities
 
-    @inbounds for j in 1:n
-        for i in 1:length(r.xₛ)
-            u[i, j] = mk[i] ? r.xₛ[i] : (rand() < P[i, j] ? 1 : -1)
-        end
-    end
-    return u
+    # @inbounds for j in 1:n
+    #     for i in 1:D
+    #         if mk[i]
+    #             u[i, j] = r.xₛ[i]
+    #         else
+    #             u[i, j] = (rand() < p[i, j]) ? 1 : -1
+    #         end
+    #     end
+    # end
+    # return u
+    p .= ifelse.(p .> 0.5f0, 1, -1)
 end
 
 function impute!(model, ps, st, x::AbstractMatrix, m::AbstractMatrix)
     ldim = getfield(model, :ldim)
     ε = randn(Float32, ldim, size(x, 2))
-    (logits, μq, logσq, μp, logσp), _ = Lux.apply(model, (x, mask, ε), ps, st)
+    (logits, μq, logσq, μp, logσp), _ = Lux.apply(model, (x, m, ε), ps, st)
     return σ.(logits)
 end
 
 sampler = VAEACSampler(deserialize("models/mnist_vaeac_model_20.jls"))
 
-# x = PAE.load_binary_mnist_matrix()[:, 2]
-# mask = random_mask(5; D=784)
+x = load_binary_mnist_matrix()[:, 2]
+random_mask(n; D=784, rng=Random.default_rng()) = (m = falses(D); m[view(randperm(rng, D), 1:n)] .= true; m )
+mask = random_mask(5; D=784)
 
+#BitVector to Vector{Bool}:
+mask = collect(mask)
+
+r = condition(sampler, x, mask)
+u = sample_all(r, 10)
