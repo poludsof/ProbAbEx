@@ -85,55 +85,6 @@ end
 ϵ = 0.9
 img_id = 2
 
-#! ################################################################################
-#= DELETE MY OLD CODE FOR BC
-cc = cpu(Flux.onecold(model(train_x)) .== train_y)
-img_ids = [findfirst(i -> cpu_train_y[i] == j && cc[i], eachindex(cc)) for j in 1:1]
-for img_id in img_ids
-    xₛ = train_x[:, img_id] |> to_gpu
-    yₛ = model(xₛ)
-    sm = Subset_minimal(model, xₛ, yₛ, (784, 256, 256))
-    ii = (empty_sbitset(784), empty_sbitset(256), empty_sbitset(256))
-
-    println("yₛ = ")
-    heuristic = BatchHeuristic(
-        ii -> accuracy_sdp3(ii, sm, samplers, 10000; verbose = true),
-        ii -> batch_heuristic3(ii, sm, samplers, 100000; verbose = true),
-        finalize
-        )
-    rule = forward_search(sm, ii, ii -> isvalid_sdp3(ii, sm, ϵ, samplers, 100000; verbose = true), heuristic; terminate_on_first_solution = true, only_smaller = false, refine_with_backward = false)
-    @show rule
-    println("finished forward search = ", length(rule), " ", rule[1])
-    # rule = backward_search(sm, rule, ii -> isvalid_sdp3(ii, sm, ϵ, samplers, 100000; verbose = true),  depth_first; terminate_on_first_solution = true)
-    println("start skeleton")
-    skeleton = map(1:length(rule)-1) do i 
-        map(rule[i+1]) do j
-            println("i = ", i, " j = ", j)
-            xᵢ = i > 1 ? model[i-1](xₛ) : xₛ
-            # sm = Subset_minimal(restrict_output(model[i], [j]), xᵢ)
-            println("sm is done")
-            # brule = backward_search(sm, rule[i], ii -> isvalid_sdp(ii, sm, ϵ, samplers[i], 10000),  depth_first; time_limit = 600, terminate_on_first_solution = true)
-            println("I: $i", " J: $j")
-            jj = findfirst(==(j), new_sets[i+1])
-            println("jj = ", jj)
-            if i == 1
-                brule = create_brule(empty_sbitset(784), subsubset_I2[jj])
-            elseif i == 2
-                brule = create_brule(empty_sbitset(256), subsubset_I1[jj])
-            end
-            println("brule = ", brule)
-            (;i, j, rule = brule)
-            # brules = backward_search(sm, rule[i], ii -> isvalid_sdp(ii, sm, ϵ, input_sampler, 10000),  depth_first; time_limit = 600, terminate_on_first_solution = false)
-            # (;i, j, rule = argmin(length, brules))
-        end
-    end
-    println("finished skeleton")
-    # push!(skeleton, [(;i = length(rule), j = 1, rule = rule[end])]) # let's add the last set as a rule
-    # serialize("/home/sofia/julia_project/Subset_minimal_search/ml_in_prague/mnist/skeleton_100_new.jls", (;rule, skeleton, xₛ = cpu(xₛ), yₛ = cpu(yₛ)))
-end
-=#
-#! ################################################################################
-
 cc = cpu(Flux.onecold(model(train_x)) .== train_y)
 img_ids = [findfirst(i -> cpu_train_y[i] == j && cc[i], eachindex(cc)) for j in 1:10]
 for img_id in img_ids

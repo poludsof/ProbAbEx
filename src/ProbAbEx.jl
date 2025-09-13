@@ -1,8 +1,7 @@
 module ProbAbEx
 
-# using CUDA
+using CUDA
 using Lux
-# using Flux
 # using JuMP
 # using HiGHS
 # using LinearAlgebra
@@ -13,7 +12,7 @@ using Base.Iterators: partition
 using Statistics
 using StaticBitSets
 using Base
-# using TimerOutputs
+using TimerOutputs
 using Optimisers
 # using CairoMakie
 # using Makie
@@ -28,13 +27,11 @@ using Random
 # using ImageCore
 using NNlib
 using Reactant
-# using Reactant_jll
-# using Functors
 using Enzyme
 using Revise
 using ColorTypes
 
-# const to = TimerOutput()
+const to = TimerOutput()
 
 struct Subset_minimal{NN, I, O, ID}
     nn::NN
@@ -49,15 +46,15 @@ Subset_minimal(nn, input) = Subset_minimal(nn, input, nn(input))
 # include("mnist_training.jl")
 # include("plots.jl")
 # include("milp.jl")
-# include("criterium.jl")
+include("criterium.jl")
 
-# include("forward_search.jl")
-# include("backward_search.jl")
-# include("beam_search.jl")
-# include("dataset_prep.jl")
-# include("heuristic.jl")
-# include("utilities.jl")
-# include("heuristics_criteria.jl")
+include("dataset_prep.jl")
+include("forward_search.jl")
+include("backward_search.jl")
+include("beam_search.jl")
+include("heuristic.jl")
+include("utilities.jl")
+include("heuristics_criteria.jl")
 
 export UniformDistribution
 export BernoulliMixture

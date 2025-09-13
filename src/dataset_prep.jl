@@ -10,6 +10,6 @@ function preprocess_bin_neg(data)
 end
 
 function onehot_labels(y)
-    return Flux.onehotbatch(y, 0:9)
+    indicatormat(y)
 end
 

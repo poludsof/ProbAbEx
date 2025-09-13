@@ -148,24 +148,25 @@ function all_forward_results()
     results
 end
 
-
+using ProbAbEx
 all_results = []
 # sampler = UniformDistribution()
-sampler_path = "models/milan_centers.jls"
-sampler = BernoulliMixture(to_gpu(deserialize(sampler_path)))
-xₛ = train_X_bin_neg[:, 1] |> to_gpu
+# sampler_path = "models/milan_centers.jls"
+# sampler = BernoulliMixture(to_gpu(deserialize(sampler_path)))
+xₛ = train_X_bin_neg[:, 1] #|> to_gpu
 yₛ = argmax(model(xₛ))
-sm = Subset_minimal(to_gpu(model), xₛ, yₛ)
+sm = ProbAbEx.Subset_minimal(model, xₛ, yₛ)
 II = init_sbitset(length(xₛ))
-# II = init_full_sbitset(xₛ)
+II = init_full_sbitset(xₛ)
 
 # push!(all_results, run_experiment_forward(20, 0.99, 10000))
 
 # all_results = all_forward_results()
 # all_results = all_beam_results()
-all_results = all_backward_results()
+# all_results = all_backward_results()
 
-# time = @elapsed steps, solution_subsets = beam_search(sm, II, ii -> isvalid_sdp(ii, sm, 0.3, sampler, 1000), ShapleyHeuristic(sm, sampler, 1000); beam_size=5, terminate_on_first_solution=true)
+sampler = ProbAbEx.VAEACSampler(deserialize("models/mnist_vaeac_model_20.jls"))
+solution_subsets = ProbAbEx.beam_search(sm, II, ii -> ProbAbEx.isvalid_sdp(ii, sm, 0.3, sampler, 1000), ProbAbEx.ShapleyHeuristic(sm, sampler, 1000); beam_size=5, terminate_on_first_solution=true)
 # time = @elapsed steps, solution_subsets = backward_search(sm, II, ii -> isvalid_sdp(ii, sm, 0.9, sampler, 1000), ShapleyHeuristic(sm, sampler, 1000))
 # time = @elapsed steps, solution_subsets = forward_search(sm, II, ii -> isvalid_sdp(ii, sm, 0.9, sampler, 1000), ShapleyHeuristic(sm, sampler, 1000); terminate_on_first_solution=true)
 

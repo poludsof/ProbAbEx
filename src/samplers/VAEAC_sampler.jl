@@ -49,7 +49,7 @@ end
 function sample_all!(u, r::ConditionedVAEAC)
     mk = r.mask
     n = size(u, 2)
-    size(u, 1) == length(mask) || error("dimension of u does not match the dimension of the sampler")
+    size(u, 1) == length(mk) || error("dimension of u does not match the dimension of the sampler")
 
     X  = repeat(reshape(Float32.(r.xₛ), length(r.xₛ), 1), 1, n)
     M  = repeat(reshape(Float32.(mk), length(r.xₛ), 1), 1, n)

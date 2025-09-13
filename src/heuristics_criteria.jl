@@ -282,20 +282,6 @@ function batch_heuristic3(ii::Tuple, sm::Subset_minimal, samplers, num_samples; 
     return(I₃ = h₃_h₂, I₂ = h₂_h₁, I₁ = h₁_h₀)
 end
 
-# function shapley_heuristic(ii::Tuple, sm::Subset_minimal, sampler, num_samples; verbose = false)
-#     (I3, I2, I1) = ii
-#     (
-#         h₃ = shapley_heuristic(I3, Subset_minimal(sm.nn, xₛ), sp.sampler, sp.num_samples),
-#         h₂ = shapley_heuristic(I2, Subset_minimal(sm.nn[2:3], sm.nn[1](xₛ)), sp.sampler, sp.num_samples),
-#         h₁ = shapley_heuristic(I1, Subset_minimal(sm.nn[3], sm.nn[1:2](xₛ)), sp.sampler, sp.num_samples),
-
-#         # the input to the neural network has to imply h₃[I2] and h₂[I1] 
-#         h₃_h₂ = shapley_heuristic(I3, restrict_output(Subset_minimal(sm.nn[1], xₛ), I2), sp.sampler, sp.num_samples),
-#         h₃_h₁ = shapley_heuristic(I3, restrict_output(Subset_minimal(sm.nn[1:2], xₛ), I1), sp.sampler, sp.num_samples),
-#         h₂_h₁ = shapley_heuristic(I2, restrict_output(Subset_minimal(sm.nn[2], sm.nn[1](xₛ)), I1), sp.sampler, sp.num_samples),
-#     )
-# end
-
 function shapley_heuristic(ii::Tuple, sm::Subset_minimal, sampler, num_samples; verbose = false)
     (I3, I2, I1) = ii
 
@@ -428,4 +414,74 @@ end
 
 depth_first(ii::SBitSet) = length(ii)
 depth_first(ii::Tuple)  = mapreduce(length, +, ii)
+
+
+
+
+
+function shapley_heuristic(ii::SBitSet, sm, sampler, num_samples, verbose = false)
+    r = condition(sampler, sm.input, ii)
+    x = sample_all(r, num_samples)
+    # y = Flux.onecold(sm.nn(x)) .== sm.output
+    y = argmax(sm.output)
+    scores = sm.nn(x)
+    if size(scores, 1) == 0 || size(scores, 2) == 0
+        error("Empty prediction scores — cannot compute onecold.")
+    end
+    ŷ = Flux.onecold(scores)
+    sum(==(y), ŷ) / length(ŷ)
+end
+
+function shapley_heuristic(ii::Tuple, sm, sampler, num_samples; verbose = false)
+    (I3, I2, I1) = ii
+    xₛ = sm.input
+    # println("shapley_heuristic")
+    h₃ = shapley_heuristic(I3, Subset_minimal(sm.nn, xₛ), sampler, num_samples)
+    h₂ = shapley_heuristic(I2, Subset_minimal(sm.nn[2:3], sm.nn[1](xₛ)), sampler, num_samples)
+    h₁ = shapley_heuristic(I1, Subset_minimal(sm.nn[3], sm.nn[1:2](xₛ)), sampler, num_samples)
+
+    h₃_h₂ = 0.0
+    h₂_h₁ = 0.0
+
+    if !isempty(I2)
+        h₃_h₂ = shapley_heuristic(I3, restrict_output(Subset_minimal(sm.nn[1], xₛ), I2), samplers[1], num_samples)
+    end 
+    if !isempty(I1)
+        h₂_h₁ = shapley_heuristic(I2, restrict_output(Subset_minimal(sm.nn[2], sm.nn[1](xₛ)), I1), samplers[2], num_samples)
+    end    
+    h₁_h₀ = shapley_heuristic(I1, Subset_minimal(sm.nn[3], sm.nn[1:2](xₛ)), samplers[3], num_samples)
+
+        # the input to the neural network has to imply h₃[I2] and h₂[I1] 
+        # h₃_h₂ = shapley_heuristic(I3, restrict_output(Subset_minimal(sm.nn[1], xₛ), I2), sampler, num_samples),
+        # h₃_h₁ = shapley_heuristic(I3, restrict_output(Subset_minimal(sm.nn[2], sm.nn[1](xₛ)), I1), sampler, num_samples),
+        # h₂_h₁ = shapley_heuristic(I2, (Subset_minimal(sm.nn[3], sm.nn[1:2](xₛ)), I1), sampler, num_samples),
+    #
+    hs = (
+        h₃ = h₃,
+        h₂ = h₂,
+        h₁ = h₁,
+        h₃_h₂ = h₃_h₂,
+        h₂_h₁ = h₂_h₁,
+        h₁_h₀ = h₁_h₀,
+    )
+    (;
+    hsum = mapreduce(x -> max(0, 0.99 - x), +, hs),
+    hmax = mapreduce(x -> max(0, 0.99 - x), max, hs),
+    )
+end
+
+struct ShapleyHeuristic{S,SM}
+    sm::SM
+    sampler::S
+    num_samples::Int
+    verbose::Bool
+end
+
+function ShapleyHeuristic(sm, sampler, num_samples, verbose = false)
+    ShapleyHeuristic(sampler, sm, num_samples, verbose)
+end
+
+(sp::ShapleyHeuristic)(ii::SBitSet) = heuristic_sdp(ii, sp.sm, 0.99, sp.sampler, sp.num_samples)
+(sp::ShapleyHeuristic)(ii::Tuple) = shapley_heuristic(ii, sp.sm, sp.sampler, sp.num_samples)
+
 

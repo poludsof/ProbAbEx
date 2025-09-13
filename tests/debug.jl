@@ -3,16 +3,19 @@
 #  ~/.juliaup/bn/julia --project=.
 using Revise
 # using ProfileCanvas, BenchmarkTools
-using CUDA
+# using CUDA
 using ProbAbEx
 import ProbAbEx as PAE
-using ProbAbEx.Flux
-using ProbAbEx.LinearAlgebra
+# using ProbAbEx.LinearAlgebra
 using ProbAbEx.MLDatasets
 using ProbAbEx.StaticBitSets
 using ProbAbEx.TimerOutputs
-using Serialization
-using ProbAbEx.Makie
+using ProbAbEx.Serialization
+using StatsBase: indicatormat
+using Flux
+
+# using PAE.Makie
+
 const to = ProbAbEx.to
 
 
@@ -20,12 +23,12 @@ const to = ProbAbEx.to
 # CUDA.device()
 
 # to_gpu = gpu
-to_gpu = cpu
+# to_gpu = cpu
 
 """ Usual nn """
 model_path = joinpath(@__DIR__, "..", "models", "binary_model.jls")
 model_path = "models/binary_model.jls"
-model = deserialize(model_path) |> to_gpu;
+model = deserialize(model_path) #|> to_gpu;
 
 """ nn for MILP search """
 # nn = Chain
@@ -37,19 +40,19 @@ model = deserialize(model_path) |> to_gpu;
 train_X, train_y = MNIST(split=:train)[:]
 test_X, test_y = MNIST(split=:test)[:]
 
-train_X_binary = preprocess_binary(train_X)
-test_X_binary = preprocess_binary(test_X)
+train_X_binary = PAE.preprocess_binary(train_X)
+test_X_binary = PAE.preprocess_binary(test_X)
 
-train_X_bin_neg = preprocess_bin_neg(train_X_binary)
-test_X_bin_neg = preprocess_bin_neg(test_X_binary)
+train_X_bin_neg = PAE.preprocess_bin_neg(train_X_binary)
+test_X_bin_neg = PAE.preprocess_bin_neg(test_X_binary)
 
-train_y = onehot_labels(train_y)
-test_y = onehot_labels(test_y)
+train_y = PAE.onehot_labels(train_y)
+test_y = PAE.onehot_labels(test_y)
 
 """ Prepare image and label """
-xₛ = train_X_bin_neg[:, 1] |> to_gpu
+xₛ = train_X_bin_neg[:, 1] #|> to_gpu
 yₛ = argmax(train_y[:, 1])
-sm = Subset_minimal(model, xₛ, yₛ)
+sm = PAE.Subset_minimal(model, xₛ, yₛ)
 
 function init_sbitset(n::Int, k = 0) 
     N = ceil(Int, n / 64)
@@ -66,7 +69,7 @@ sampler = UniformDistribution()
 # sampler_path = "Subset_minimal_search/models/milan_centers.jls"
 # sampler = BernoulliMixture(to_gpu(deserialize(sampler_path)))
 #test
-# ii = init_sbitset(784)
+ii = init_sbitset(784)
 # data_matrix = data_distribution(xₛ, ii, r, 100)
 
 #first image
@@ -75,12 +78,7 @@ sampler = UniformDistribution()
 # println(2*data_matrix[:, 1] .- 1)
 # plot_mnist_image(2*data_matrix[:, 20] .- 1)
 
-
-""" Test conditioning """
-
 """ Test MILP search """
-
-
 # """ Test one subset(layer) backward/forward/beam search """ -- too slow
 # threshold denotes the required precision of the subset
 # solution_subset = one_subset_forward_search(sm, criterium_sdp; data_model=r, max_steps=50, threshold=0.5, num_samples=10, terminate_on_first_solution=false)
@@ -95,126 +93,7 @@ sampler = UniformDistribution()
 reset_timer!(to)
 
 #1. Initialization
-# II = (init_sbitset(784), nothing, nothing)
-# For tuple, we need to define appropriate heuristics which understand tuples
-function isvalid_sdp(ii::Tuple, sm, ϵ, sampler, num_samples, verbose = false)
-    acc = criterium_sdp(sm.nn, sm.input, sm.output, ii[1], sampler, num_samples)
-    verbose && println("accuracy  = ",acc , " threshold = ", ϵ)
-    acc > ϵ
-end
-
-function heuristic_sdp(ii::Tuple, sm, ϵ, sampler, num_samples, verbose = false)
-    h = heuristic(sm, criterium_sdp, sdp_partial, ii, ϵ, sampler, num_samples)
-    verbose && println("heuristic = ",h)
-    h
-end
-
-
-# For tuple, we need to define appropriate heuristics which understand tuples
-
-function isvalid_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples, verbose = false)
-    acc = criterium_sdp(sm.nn, sm.input, sm.output, ii, sampler, num_samples)
-    verbose && println("accuracy  = ",acc , " threshold = ", ϵ)
-    acc > ϵ
-end
-
-function heuristic_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples, verbose = false)
-    h = criterium_sdp(sm.nn, sm.input, sm.output, ii, sampler, num_samples)
-    h = ϵ - h
-    verbose && println("heuristic = ",h)
-    (;hsum = h, hmax = h)
-end
-
-function isvalid_ep(ii::SBitSet, sm, ϵ, sampler, num_samples, verbose = false)
-    acc = criterium_ep(sm.nn, sm.input, sm.output, ii, sampler, num_samples)
-    verbose && println("accuracy  = ",acc , " threshold = ", ϵ)
-    acc > ϵ
-end
-
-function heuristic_ep(ii::SBitSet, sm, ϵ, sampler, num_samples, verbose = false)
-    h = criterium_ep(sm.nn, sm.input, sm.output, ii, sampler, num_samples)
-    h = ϵ - h
-    verbose && println("heuristic = ",h)
-    (;hsum = h, hmax = h)
-end
-
-function shapley_heuristic(ii::SBitSet, sm, sampler, num_samples, verbose = false)
-    r = condition(sampler, sm.input, ii)
-    x = sample_all(r, num_samples)
-    # y = Flux.onecold(sm.nn(x)) .== sm.output
-    y = argmax(sm.output)
-    scores = sm.nn(x)
-    if size(scores, 1) == 0 || size(scores, 2) == 0
-        error("Empty prediction scores — cannot compute onecold.")
-    end
-    ŷ = Flux.onecold(scores)
-    sum(==(y), ŷ) / length(ŷ)
-end
-
-function shapley_heuristic(ii::Tuple, sm, sampler, num_samples; verbose = false)
-    (I3, I2, I1) = ii
-    xₛ = sm.input
-    # println("shapley_heuristic")
-    h₃ = shapley_heuristic(I3, Subset_minimal(sm.nn, xₛ), sampler, num_samples)
-    h₂ = shapley_heuristic(I2, Subset_minimal(sm.nn[2:3], sm.nn[1](xₛ)), sampler, num_samples)
-    h₁ = shapley_heuristic(I1, Subset_minimal(sm.nn[3], sm.nn[1:2](xₛ)), sampler, num_samples)
-
-    h₃_h₂ = 0.0
-    h₂_h₁ = 0.0
-
-    if !isempty(I2)
-        h₃_h₂ = shapley_heuristic(I3, restrict_output(Subset_minimal(sm.nn[1], xₛ), I2), samplers[1], num_samples)
-    end 
-    if !isempty(I1)
-        h₂_h₁ = shapley_heuristic(I2, restrict_output(Subset_minimal(sm.nn[2], sm.nn[1](xₛ)), I1), samplers[2], num_samples)
-    end    
-    h₁_h₀ = shapley_heuristic(I1, Subset_minimal(sm.nn[3], sm.nn[1:2](xₛ)), samplers[3], num_samples)
-
-        # the input to the neural network has to imply h₃[I2] and h₂[I1] 
-        # h₃_h₂ = shapley_heuristic(I3, restrict_output(Subset_minimal(sm.nn[1], xₛ), I2), sampler, num_samples),
-        # h₃_h₁ = shapley_heuristic(I3, restrict_output(Subset_minimal(sm.nn[2], sm.nn[1](xₛ)), I1), sampler, num_samples),
-        # h₂_h₁ = shapley_heuristic(I2, (Subset_minimal(sm.nn[3], sm.nn[1:2](xₛ)), I1), sampler, num_samples),
-    #
-    hs = (
-        h₃ = h₃,
-        h₂ = h₂,
-        h₁ = h₁,
-        h₃_h₂ = h₃_h₂,
-        h₂_h₁ = h₂_h₁,
-        h₁_h₀ = h₁_h₀,
-    )
-    (;
-    hsum = mapreduce(x -> max(0, 0.99 - x), +, hs),
-    hmax = mapreduce(x -> max(0, 0.99 - x), max, hs),
-    )
-end
-
-struct ShapleyHeuristic{S,SM}
-    sm::SM
-    sampler::S
-    num_samples::Int
-    verbose::Bool
-end
-
-function ShapleyHeuristic(sm, sampler, num_samples, verbose = false)
-    ShapleyHeuristic(sampler, sm, num_samples, verbose)
-end
-
-(sp::ShapleyHeuristic)(ii::SBitSet) = heuristic_sdp(ii, sm, 0.99, sampler, 10000)
-(sp::ShapleyHeuristic)(ii::Tuple) = shapley_heuristic(ii, sm, sampler, 10000)
-
-# function Subset_minimal_search.expand_frwd(sm::Subset_minimal_search.Subset_minimal, stack, closed_list, ii::SBitSet, heuristic_fun::ShapleyHeuristic)
-#     sp = heuristic_fun
-#     acc = @timeit to "heuristic" shapley_heuristic(ii, sp.sm, sp.sampler, sp.num_samples, sp.verbose)
-#     for i in setdiff(1:sm.dims, ii)
-#         new_subset = push(ii, i)
-#         if new_subset ∉ closed_list
-#             new_error = 1 -acc[i]
-#             push!(stack, (new_error, new_error, new_subset))
-#         end
-#     end
-#     stack
-# end
+II = (init_sbitset(784), nothing, nothing)
 
 #  serialize("/home/pevnytom/tmp/subsets.jls", (;solutions = collect(solution_subsets), x = Vector(xₛ)))
 

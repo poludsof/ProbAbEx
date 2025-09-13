@@ -111,7 +111,11 @@ function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
     loader = make_loader(data; batchsize=batch_size, shuffle=true)
     loader_dev = DeviceIterator(dev, loader)
 
-    opt = Optimisers.Adam(lr)
+    # opt = Optimisers.Adam(lr)
+    opt = Optimisers.OptimiserChain(
+          Optimisers.WeightDecay(0.001f0),
+          Optimisers.Adam(lr),
+    )
     ts = Lux.Training.TrainState(model, ps, st, opt)
 
     for epoch in 1:epochs
