@@ -133,5 +133,3 @@ function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
     end
     return ts
 end
-
-# ts = train_vaeac(epochs=10, lr=0.001f0, batch_size=100)

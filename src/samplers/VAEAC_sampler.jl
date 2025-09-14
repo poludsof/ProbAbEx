@@ -51,20 +51,11 @@ function sample_all!(u, r::ConditionedVAEAC)
     n = size(u, 2)
     size(u, 1) == length(mk) || error("dimension of u does not match the dimension of the sampler")
 
-    X  = repeat(reshape(Float32.(r.xₛ), length(r.xₛ), 1), 1, n)
-    M  = repeat(reshape(Float32.(mk), length(r.xₛ), 1), 1, n)
+    x  = repeat(reshape(Float32.(r.xₛ), length(r.xₛ), 1), 1, n)
+    m  = repeat(reshape(Float32.(mk), length(r.xₛ), 1), 1, n)
 
-    x_hat = impute!(r.r.model, r.r.ps, r.r.st, X, M)
-    # @inbounds for j in 1:n
-    #     for i in 1:D
-    #         if mk[i]
-    #             u[i, j] = r.xₛ[i]
-    #         else
-    #             u[i, j] = (rand() < p[i, j]) ? 1 : -1
-    #         end
-    #     end
-    # end
-    # return u
+    x_hat = impute!(r.r.model, r.r.ps, r.r.st, x, m)
+
     x_hat .= ifelse.(x_hat .> 0.5f0, 1, -1)
 end
 

@@ -29,7 +29,7 @@ test_y = onehot_labels(test_y)
 
  
 ``` Train the neural network and evaluate the accuracy. ```  
-nn = train_nn(nn, train_X_binary, train_y, test_X_binary, test_y)
+# nn = train_nn(nn, train_X_binary, train_y, test_X_binary, test_y)
 
 # argmax(nn(train_X_binary[:, 1])) - 1
 println("Train Accuracy: ", accuracy(nn, train_X_binary, train_y) * 100, "%")  # 97-99%
