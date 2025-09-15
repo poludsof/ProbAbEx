@@ -267,20 +267,20 @@ function isvalid_sdp3(ii::Tuple, sm, ϵ, samplers, num_samples; verbose = false)
     all(e ≥ ϵ for e in accs)
 end
 
-function batch_heuristic3(ii::Tuple, sm::Subset_minimal, samplers, num_samples; verbose = false)
-    (I3, I2, I1) = ii
-    xₛ = sm.input
-    h₃_h₂ = shapley_heuristic(I3, restrict_output(Subset_minimal(sm.nn[1], xₛ), I2), samplers[1], num_samples)
-    h₂_h₁ = shapley_heuristic(I2, restrict_output(Subset_minimal(sm.nn[2], sm.nn[1](xₛ)), I1), samplers[2], num_samples)
-    h₁_h₀ = shapley_heuristic(I1, Subset_minimal(sm.nn[3], sm.nn[1:2](xₛ)), samplers[3], num_samples)
-    if isempty(I2)
-        h₃_h₂ .= 0.0
-    end    
-    if isempty(I1)
-        h₂_h₁ .= 0.0
-    end    
-    return(I₃ = h₃_h₂, I₂ = h₂_h₁, I₁ = h₁_h₀)
-end
+# function batch_heuristic3(ii::Tuple, sm::Subset_minimal, samplers, num_samples; verbose = false)
+#     (I3, I2, I1) = ii
+#     xₛ = sm.input
+#     h₃_h₂ = shapley_heuristic(I3, restrict_output(Subset_minimal(sm.nn[1], xₛ), I2), samplers[1], num_samples)
+#     h₂_h₁ = shapley_heuristic(I2, restrict_output(Subset_minimal(sm.nn[2], sm.nn[1](xₛ)), I1), samplers[2], num_samples)
+#     h₁_h₀ = shapley_heuristic(I1, Subset_minimal(sm.nn[3], sm.nn[1:2](xₛ)), samplers[3], num_samples)
+#     if isempty(I2)
+#         h₃_h₂ .= 0.0
+#     end    
+#     if isempty(I1)
+#         h₂_h₁ .= 0.0
+#     end    
+#     return(I₃ = h₃_h₂, I₂ = h₂_h₁, I₁ = h₁_h₀)
+# end
 
 function shapley_heuristic(ii::Tuple, sm::Subset_minimal, sampler, num_samples; verbose = false)
     (I3, I2, I1) = ii

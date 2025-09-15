@@ -1,10 +1,4 @@
-using Flux
-using MLDatasets
-using Flux.Zygote
-using MLUtils: DataLoader
-using Flux: onehotbatch, onecold
-using Flux.Losses: logitcrossentropy, mse
-using Flux.Optimise: update!
+
 
 ENV["DATADEPS_ALWAYS_ACCEPT"] = "true"
 
