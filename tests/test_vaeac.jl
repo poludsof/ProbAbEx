@@ -1,6 +1,5 @@
 import ProbAbEx as PAE
-using ProbAbEx: Serialization, Random, Optimisers, Lux, Base, ColorTypes, NNlib
-# using Serialization, Random, Optimisers, Lux, Base, ColorTypes, NNlib
+using Serialization, Random, Optimisers, Lux, Base, ColorTypes, NNlib, MLDatasets, StaticBitSets
 using FileIO, CairoMakie
 using BSON: @save, @load
 
@@ -122,8 +121,68 @@ x_img2 = sample_and_save(x, mask, ts2, binary=true)
 """ ================ Save and Load Model ================= """
 
 save_vaeac_jls(ts, "models/mnist_vaeac_model_50.jls")
+
 ts2 = load_vaeac_jls("models/mnist_vaeac_model_50.jls"; lr=0.001f0)
 
 
 save_vaeac(ts, "models/mnist_vaeac_model_50.bson")
+
 ts2 = load_vaeac("models/mnist_vaeac_model_50.bson"; lr=0.001f0)
+
+
+""" ================ Search ================= """
+function get_mnist_data()
+    train_X, train_y = MNIST(split=:train)[:]
+    test_X, test_y = MNIST(split=:test)[:]
+
+    train_X_binary = PAE.preprocess_binary(train_X)
+    test_X_binary = PAE.preprocess_binary(test_X)
+
+    train_X_bin_neg = PAE.preprocess_bin_neg(train_X_binary)
+    test_X_bin_neg = PAE.preprocess_bin_neg(test_X_binary)
+
+    train_y = PAE.onehot_labels(train_y)
+    test_y = PAE.onehot_labels(test_y)
+
+    return train_X_bin_neg, train_y, test_X_bin_neg, test_y
+end
+
+function init_sbitset(n::Int, k = 0) 
+    N = ceil(Int, n / 64)
+    x = SBitSet{N, UInt64}()
+    k == 0 && return(x)
+    for i in rand(1:n, k)
+        x = push(x, i)
+    end
+    x
+end
+
+function init_full_sbitset(xₛ)
+    II = SBitSet{13, UInt64}(collect(1:length(xₛ)))
+    II
+end
+
+
+
+#! it needs Flux
+using Flux
+model = deserialize(joinpath(@__DIR__, "..", "models", "binary_model.jls"))
+train_X_bin_neg, train_y, test_X_bin_neg, test_y = get_mnist_data()
+xₛ = train_X_bin_neg[:, 1] #|> to_gpu
+yₛ = argmax(model(xₛ))
+sm = PAE.Subset_minimal(model, xₛ, yₛ)
+
+II = init_sbitset(length(xₛ))
+#or for backward
+II = init_full_sbitset(xₛ)
+
+#? sampler
+# sampler = PAE.UniformDistribution()
+sampler = PAE.BernoulliMixture(deserialize(joinpath(@__DIR__, "..", "models", "milan_centers.jls")))
+# sampler = PAE.VAEACSampler(deserialize("models/mnist_vaeac_model_20.jls"))
+
+#? run search
+solution_subsets = PAE.beam_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.3, sampler, 1000), PAE.ShapleyHeuristic(sm, sampler, 1000); beam_size=5, terminate_on_first_solution=true)
+# time = @elapsed steps, solution_subsets = backward_search(sm, II, ii -> isvalid_sdp(ii, sm, 0.9, sampler, 1000), ShapleyHeuristic(sm, sampler, 1000))
+# time = @elapsed steps, solution_subsets = forward_search(sm, II, ii -> isvalid_sdp(ii, sm, 0.9, sampler, 1000), ShapleyHeuristic(sm, sampler, 1000); terminate_on_first_solution=true)
+

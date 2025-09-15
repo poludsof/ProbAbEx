@@ -31,7 +31,7 @@ function accuracy_sdp(ŷ::Matrix, y::Vector, omask::SBitSet)
 end
 
 function accuracy_sdp(logits::AbstractMatrix, y::Integer)
-    ŷ =  Flux.onecold(logits)
+    ŷ =  onecold(logits)
     sum(==(y), ŷ) / length(ŷ)
 end
 

@@ -21,7 +21,7 @@ using Serialization
 # using DataStructures
 # using Distributions
 using Random
-# using ADTypes
+# using ADTypess
 # using FileIO
 # using ImageTransformations
 # using ImageCore
@@ -30,6 +30,7 @@ using Reactant
 using Enzyme
 using Revise
 using ColorTypes
+using OneHotArrays # to replace Flux.onehot
 
 const to = TimerOutput()
 
@@ -58,7 +59,7 @@ include("heuristics_criteria.jl")
 
 export UniformDistribution
 export BernoulliMixture
-export BatchHeuristic
+# export BatchHeuristic
 include("samplers/uniform_sampler.jl")
 include("samplers/mixture_sampler.jl")
 include("samplers/VAEAC_training.jl")
