@@ -23,7 +23,7 @@ function run_experiment_forward(num_img, ϵ, num_samples)
             terminate_on_first_solution=true,
             refine_with_backward=true
         )
-        # CUDA.synchronize()
+        CUDA.synchronize()
 
         if solution_subsets !== nothing && time <= 100
             subset_size = length(solution_subsets) > 0 ? length(solution_subsets) : 0
@@ -31,7 +31,7 @@ function run_experiment_forward(num_img, ϵ, num_samples)
             successful_images += 1
         end
 
-        # CUDA.reclaim()
+        CUDA.reclaim()
         img_i += 1
     end
 
@@ -151,9 +151,9 @@ end
 using ProbAbEx
 all_results = []
 # sampler = UniformDistribution()
-# sampler_path = "models/milan_centers.jls"
-# sampler = BernoulliMixture(to_gpu(deserialize(sampler_path)))
-xₛ = train_X_bin_neg[:, 1] #|> to_gpu
+sampler_path = "models/milan_centers.jls"
+sampler = BernoulliMixture(to_gpu(deserialize(sampler_path)))
+xₛ = train_X_bin_neg[:, 1] |> to_gpu
 yₛ = argmax(model(xₛ))
 sm = ProbAbEx.Subset_minimal(model, xₛ, yₛ)
 II = init_sbitset(length(xₛ))
@@ -165,7 +165,6 @@ II = init_full_sbitset(xₛ)
 # all_results = all_beam_results()
 # all_results = all_backward_results()
 
-sampler = ProbAbEx.VAEACSampler(deserialize("models/mnist_vaeac_model_20.jls"))
 solution_subsets = ProbAbEx.beam_search(sm, II, ii -> ProbAbEx.isvalid_sdp(ii, sm, 0.3, sampler, 1000), ProbAbEx.ShapleyHeuristic(sm, sampler, 1000); beam_size=5, terminate_on_first_solution=true)
 # time = @elapsed steps, solution_subsets = backward_search(sm, II, ii -> isvalid_sdp(ii, sm, 0.9, sampler, 1000), ShapleyHeuristic(sm, sampler, 1000))
 # time = @elapsed steps, solution_subsets = forward_search(sm, II, ii -> isvalid_sdp(ii, sm, 0.9, sampler, 1000), ShapleyHeuristic(sm, sampler, 1000); terminate_on_first_solution=true)

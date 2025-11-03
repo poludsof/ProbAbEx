@@ -3,7 +3,7 @@ module CUDAExt
 using ProbAbEx, CUDA
 using ProbAbEx.StaticBitSets
 using ProbAbEx.StatsBase
-using Flux
+# using ProbAbEx.Flux
 using ProbAbEx: ConditionedUniformDistribution, UniformDistribution, condition, ConditionedBernoulliMixture
 
 @inline function ProbAbEx.condition(r::UniformDistribution, xₛ::CuArray, known_ii::SBitSet)

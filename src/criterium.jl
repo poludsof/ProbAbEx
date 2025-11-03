@@ -4,7 +4,7 @@ function ep_score(logits, y::Integer)
 end
 
 function sdp_score(logits, y::Integer)
-    ŷ =  Flux.onecold(logits)
+    ŷ =  onecold(logits)
     sum(==(y), ŷ) / length(ŷ)
 end
 

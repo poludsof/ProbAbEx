@@ -25,6 +25,7 @@ StaticBitSets = "72d6c30d-a10b-4e7e-bc09-3079d9530bdf"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
+cuDNN = "02a925ec-e4fe-4b08-9a7e-0d78e3d38ccd"
 
 [compat]
 CUDA = "5.8.3"
@@ -34,3 +35,4 @@ Colors = "0.13.1"
 NNlib = "0.9.31"
 OneHotArrays = "0.2.10"
 TimerOutputs = "0.5.29"
+cuDNN = "1.4.5"

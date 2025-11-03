@@ -65,35 +65,3 @@ function impute!(model, ps, st, x::AbstractMatrix, m::AbstractMatrix)
     (logits, μq, logσq, μp, logσp), _ = Lux.apply(model, (x, m, ε), ps, st)
     return σ.(logits)
 end
-
-
-""" Example usage: """ #! todo: delete
-
-# sampler = VAEACSampler(deserialize("models/mnist_vaeac_model_20.jls"))
-
-# x = load_binary_mnist_matrix()[:, 2]
-# random_mask(n; D=784, rng=Random.default_rng()) = (m = falses(D); m[view(randperm(rng, D), 1:n)] .= true; m )
-# mask = random_mask(30; D=784)
-# mask = collect(mask)
-# N = 10
-# r = condition(sampler, x, mask)
-# u = sample_all(r, N)
-
-# for i_sample in 1:N
-#     g = reshape(u[:, i_sample], 28, 28)
-#     m = reshape(mask[:, 1], 28, 28)
-#     img = Array{RGB{Float32}}(undef, 28, 28)
-
-#     for i in 1:28, j in 1:28
-#         if m[i, j] == 1
-#             img[i, j] = RGB{Float32}(0.5, 0, 0)
-#             if x[(j-1)*28 + i, 1] == 1
-#                 img[i, j] = RGB{Float32}(1, 0, 0)
-#             end
-#         else
-#             gray_val = clamp(g[i, j], 0, 1)
-#             img[i, j] = RGB{Float32}(gray_val, gray_val, gray_val)
-#         end
-#     end
-#     display(reverse(Base.rotr90(img), dims=2))
-# end

@@ -10,13 +10,9 @@
     solutions with minimal length.
 """
 function backward_search(sm::Subset_minimal, ii::TT, isvalid::Function, heuristic_fun; time_limit=Inf, terminate_on_first_solution=true) where {TT}
-    if !isvalid(ii) 
-        println("initial verification of the solution failed, returning the solution")
-        return(0, ii)
-    end
     # if !isvalid(ii) 
     #     println("initial verification of the solution failed, returning the solution")
-    #     return(0, ii)
+    #     return ii
     # end
     println("sm:::::::", sm.output)
     println("II length: ", solution_length(ii))

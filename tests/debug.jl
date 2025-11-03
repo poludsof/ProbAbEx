@@ -3,7 +3,6 @@
 #  ~/.juliaup/bn/julia --project=.
 using Revise
 # using ProfileCanvas, BenchmarkTools
-# using CUDA
 using ProbAbEx
 import ProbAbEx as PAE
 # using ProbAbEx.LinearAlgebra
@@ -12,6 +11,7 @@ using ProbAbEx.StaticBitSets
 using ProbAbEx.TimerOutputs
 using ProbAbEx.Serialization
 using StatsBase: indicatormat
+using CUDA
 using Flux
 
 # using PAE.Makie
@@ -19,16 +19,20 @@ using Flux
 const to = ProbAbEx.to
 
 
-# CUDA.has_cuda()
-# CUDA.device()
+CUDA.has_cuda()
+CUDA.device()
 
-# to_gpu = gpu
+to_gpu = gpu
 # to_gpu = cpu
 
 """ Usual nn """
 model_path = joinpath(@__DIR__, "..", "models", "binary_model.jls")
 model_path = "models/binary_model.jls"
-model = deserialize(model_path) #|> to_gpu;
+model = deserialize(model_path) |> to_gpu;
+
+""" check if model on GPU """
+is_on_gpu = all(p -> p isa CUDA.CuArray, Flux.params(model))
+println(is_on_gpu)
 
 """ nn for MILP search """
 # nn = Chain
@@ -50,7 +54,7 @@ train_y = PAE.onehot_labels(train_y)
 test_y = PAE.onehot_labels(test_y)
 
 """ Prepare image and label """
-xₛ = train_X_bin_neg[:, 1] #|> to_gpu
+xₛ = train_X_bin_neg[:, 1] |> to_gpu
 yₛ = argmax(train_y[:, 1])
 sm = PAE.Subset_minimal(model, xₛ, yₛ)
 
@@ -65,7 +69,7 @@ function init_sbitset(n::Int, k = 0)
 end
 
 sampler = UniformDistribution()
-# sampler = BernoulliMixture(to_gpu(deserialize(joinpath(@__DIR__, "..", "models", "milan_centers.jls"))))
+sampler = BernoulliMixture(to_gpu(deserialize(joinpath(@__DIR__, "..", "models", "milan_centers.jls"))))
 # sampler_path = "Subset_minimal_search/models/milan_centers.jls"
 # sampler = BernoulliMixture(to_gpu(deserialize(sampler_path)))
 #test
@@ -113,7 +117,7 @@ yₛ = argmax(model(xₛ))
 # variant with just input
 # II = init_sbitset(length(xₛ))
 # sm = Subset_minimal(model, xₛ, yₛ)
-sm = Subset_minimal(model, xₛ, yₛ, (784, 256, 256))
+sm = PAE.Subset_minimal(model, xₛ, yₛ, (784, 256, 256))
 II = (init_sbitset(784), init_sbitset(256), init_sbitset(256))
 
 # t = @elapsed solution_subsets = forward_search(sm, II, ii -> isvalid_sdp(ii, sm, ϵ, sampler, 100),  ShapleyHeuristic(sm, sampler, 100), refine_with_backward = false)

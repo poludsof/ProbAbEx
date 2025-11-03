@@ -104,7 +104,7 @@ end
 
 
 """ ========= Create and train model ========= """
-ts = PAE.train_vaeac(epochs=20, lr=0.01f0, batch_size=150)
+ts = PAE.train_vaeac(epochs=2, lr=0.001f0, batch_size=150)
 
 
 
@@ -114,21 +114,23 @@ mask = random_mask(5; D=784)
 
 
 x_img = sample_and_save_png(ts2, x, mask; binary=true)
-x_img2 = sample_and_save(x, mask, ts2, binary=true)
+x_img2 = sample_and_save(x, mask, ts, binary=true)
 
 
 
 """ ================ Save and Load Model ================= """
 
-save_vaeac_jls(ts, "models/mnist_vaeac_model_50.jls")
+# save_vaeac_jls(ts, "models/mnist_vaeac_model_tmp.jls")
 
 ts2 = load_vaeac_jls("models/mnist_vaeac_model_50.jls"; lr=0.001f0)
 
 
-save_vaeac(ts, "models/mnist_vaeac_model_50.bson")
+# save_vaeac(ts, "models/mnist_vaeac_model_tmp.bson")
 
 ts2 = load_vaeac("models/mnist_vaeac_model_50.bson"; lr=0.001f0)
 
+
+ts3 = deserialize(joinpath(@__DIR__, "..", "models", "mnist_vaeac_model_50.jls"))
 
 """ ================ Search ================= """
 function get_mnist_data()
@@ -163,26 +165,50 @@ function init_full_sbitset(xₛ)
 end
 
 
+# Reactant.set_default_backend("gpu")
+# dev = reactant_device()
+using CUDA
+dev = CUDA.has_cuda() ? cu : identity
+CUDA.versioninfo()
+@show CUDA.has_cuda()    # true
+@show CUDA.functional()  # must be true
+CUDA.device()
 
 #! it needs Flux
 using Flux
-model = deserialize(joinpath(@__DIR__, "..", "models", "binary_model.jls"))
+dev = gpu
+
+model = dev(deserialize(joinpath(@__DIR__, "..", "models", "binary_model.jls")))
+model = fmap(dev, model)
 train_X_bin_neg, train_y, test_X_bin_neg, test_y = get_mnist_data()
-xₛ = train_X_bin_neg[:, 1] #|> to_gpu
-yₛ = argmax(model(xₛ))
+xₛ = train_X_bin_neg[:, 1] #|> dev
+yₛ =  argmax(train_y[:, 1])
 sm = PAE.Subset_minimal(model, xₛ, yₛ)
 
 II = init_sbitset(length(xₛ))
 #or for backward
-II = init_full_sbitset(xₛ)
+# II = init_full_sbitset(xₛ)
 
 #? sampler
-# sampler = PAE.UniformDistribution()
-sampler = PAE.BernoulliMixture(deserialize(joinpath(@__DIR__, "..", "models", "milan_centers.jls")))
-# sampler = PAE.VAEACSampler(deserialize("models/mnist_vaeac_model_20.jls"))
+sampler = PAE.UniformDistribution()
+sampler = PAE.BernoulliMixture(deserialize(joinpath(@__DIR__, "..", "models", "milan_centers.jls"))) #|> dev
+# sampler = PAE.VAEACSampler(deserialize("models/mnist_vaeac_model_20.jls")) |> dev
 
 #? run search
-solution_subsets = PAE.beam_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.3, sampler, 1000), PAE.ShapleyHeuristic(sm, sampler, 1000); beam_size=5, terminate_on_first_solution=true)
-# time = @elapsed steps, solution_subsets = backward_search(sm, II, ii -> isvalid_sdp(ii, sm, 0.9, sampler, 1000), ShapleyHeuristic(sm, sampler, 1000))
-# time = @elapsed steps, solution_subsets = forward_search(sm, II, ii -> isvalid_sdp(ii, sm, 0.9, sampler, 1000), ShapleyHeuristic(sm, sampler, 1000); terminate_on_first_solution=true)
+solution_subsets = PAE.beam_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.3, sampler, 100), PAE.ShapleyHeuristic(sm, sampler, 100); beam_size=5, terminate_on_first_solution=true)
+solution_subsets = PAE.forward_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.3, sampler, 10), PAE.ShapleyHeuristic(sm, sampler, 10); refine_with_backward = false, terminate_on_first_solution=true)
+
+# is_on_gpu = any(x -> x isa CUDA.CuArray, Flux.params(model))
+
+# function model_on_gpu(m)
+#     ps = Flux.params(m)
+#     isempty(ps) && return false
+#     all(p -> p isa CuArray, ps)
+# end
+
+# model_on_gpu(model)
+
+
+#! todo
+# solution_subsets = PAE.backward_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.6, sampler, 1000), PAE.ShapleyHeuristic(sm, sampler, 1000))
 
