@@ -65,7 +65,7 @@ include("samplers/mixture_sampler.jl")
 include("samplers/VAEAC_training.jl")
 include("samplers/VAEAC_sampler.jl")
 
-include("/home/sofia/ProbAbEx/ext/CUDAExt.jl")
+# include("/home/sofia/ProbAbEx/ext/CUDAExt.jl")
 # include("datasets/celeba.jl")
 
 end
