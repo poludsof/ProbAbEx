@@ -1,22 +1,19 @@
 module ProbAbEx
 
-using CUDA
+# using CUDA
 using Lux
-# using JuMP
-# using HiGHS
-# using LinearAlgebra
+using JuMP
+using HiGHS
+using LinearAlgebra
 using MLDatasets
 using StatsBase
 using MLUtils
-using Base.Iterators: partition
+# using Base.Iterators: partition
 using Statistics
 using StaticBitSets
-using Base
+# using Base
 using TimerOutputs
 using Optimisers
-# using CairoMakie
-# using Makie
-# using Makie.Colors
 using Serialization
 # using DataStructures
 # using Distributions
@@ -29,7 +26,7 @@ using NNlib
 using Reactant
 using Enzyme
 using Revise
-using ColorTypes
+# using ColorTypes
 using OneHotArrays # to replace Flux.onehot
 
 const to = TimerOutput()
@@ -44,9 +41,9 @@ end
 Subset_minimal(nn, input, output) = Subset_minimal(nn, input, output, length(input))
 Subset_minimal(nn, input) = Subset_minimal(nn, input, nn(input))
 
-# include("mnist_training.jl")
-# include("plots.jl")
-# include("milp.jl")
+include("mnist_training.jl")
+# # include("plots.jl")
+# # include("milp.jl")
 include("criterium.jl")
 
 include("dataset_prep.jl")
@@ -65,7 +62,7 @@ include("samplers/mixture_sampler.jl")
 include("samplers/VAEAC_training.jl")
 include("samplers/VAEAC_sampler.jl")
 
-# include("/home/sofia/ProbAbEx/ext/CUDAExt.jl")
-# include("datasets/celeba.jl")
+# # include("/home/sofia/ProbAbEx/ext/CUDAExt.jl")
+# # include("datasets/celeba.jl")
 
 end

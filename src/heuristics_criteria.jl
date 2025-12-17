@@ -16,13 +16,39 @@ function accuracy_sdp(ŷ::AbstractMatrix, y::AbstractVector)
     mean(correct)
 end
 
-function accuracy_sdp(ŷ::CuMatrix, y::CuVector, omask::SBitSet)
-    omask = cu(collect(omask))
-    match = ŷ .!= y
-    correct = .!maximum(match[omask,:], dims = 1)
-    mean(correct)
+#CUDA
+# function accuracy_sdp(ŷ::CuMatrix, y::CuVector, omask::SBitSet)
+#     omask = cu(collect(omask))
+#     match = ŷ .!= y
+#     correct = .!maximum(match[omask,:], dims = 1)
+#     mean(correct)
+# end
+
+#Reactant
+function compute_accuracy_batch(logits, y_scalar)
+    max_vals = maximum(logits; dims=1)
+    is_max = logits .== max_vals
+    target_scores = logits[y_scalar, :]
+    max_vals_vec = reshape(max_vals, :)
+    correct = target_scores .== max_vals_vec
+    return mean(correct)
+end
+# function compute_accuracy_batch(logits, y_scalar)
+#     max_vals = maximum(logits; dims=1)
+#     target_scores = logits[y_scalar, :]
+#     target_scores_reshaped = reshape(target_scores, 1, :)
+#     correct_bool = target_scores_reshaped .== max_vals
+#     correct_float = Float32.(correct_bool)
+    
+#     return sum(correct_float) / Float32(length(correct_float))
+# end
+
+function accuracy_sdp(logits::ConcretePJRTArray, y::Integer)
+    acc = @jit compute_accuracy_batch(logits, y)
+    return Float64(acc)
 end
 
+# NO Reactant
 function accuracy_sdp(ŷ::Matrix, y::Vector, omask::SBitSet)
     omask = collect(omask)
     match = ŷ .!= y
@@ -35,12 +61,27 @@ function accuracy_sdp(logits::AbstractMatrix, y::Integer)
     sum(==(y), ŷ) / length(ŷ)
 end
 
+# Initial: accuracy_sdp
+# function accuracy_sdp(ii::SBitSet, sm, sampler, num_samples; verbose = false)
+#     r = condition(sampler, sm.input, ii)
+#     x = sample_all(r, num_samples)
+#     accuracy_sdp(sm.nn(x), sm.output)
+# end
 
 function accuracy_sdp(ii::SBitSet, sm, sampler, num_samples; verbose = false)
     r = condition(sampler, sm.input, ii)
-    x = sample_all(r, num_samples)
-    accuracy_sdp(sm.nn(x), sm.output)
+    x_flat = sample_all(r, num_samples)
+    img_dim = Int(sqrt(size(x_flat, 1)))
+    x_reshaped = reshape(x_flat, img_dim, img_dim, 1, num_samples)
+
+    model = sm.nn.model
+    ps = sm.nn.ps
+    st = sm.nn.st
+    
+    y, _ = @jit model(x_reshaped, ps, st)
+    accuracy_sdp(y, sm.output)
 end
+
 
 function isvalid_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples; verbose = false)
     acc = accuracy_sdp(ii, sm, sampler, num_samples)
@@ -72,11 +113,11 @@ function iscorrect(ŷ::AbstractMatrix, y::Integer)
 end
 
 
-function iscorrect(ŷ::CuMatrix, y::CuVector, omask::SBitSet)
-    omask = cu(collect(omask))
-    match = ŷ .!= y
-    .!maximum(match[omask,:], dims = 1)
-end
+# function iscorrect(ŷ::CuMatrix, y::CuVector, omask::SBitSet)
+#     omask = cu(collect(omask))
+#     match = ŷ .!= y
+#     .!maximum(match[omask,:], dims = 1)
+# end
 
 function iscorrect(ŷ::Matrix, y::Vector, omask::SBitSet)
     omask = collect(omask)
@@ -239,12 +280,12 @@ end
 
 restrict_output(w::Matrix, ii::SBitSet) = restrict_output(w, collect(ii))
 restrict_output(w::Matrix, ii::Vector) = w[ii, :]
-restrict_output(w::CuMatrix, ii::Vector) = w[cu(ii), :]
-restrict_output(w::CuMatrix, ii::SBitSet) = restrict_output(w, collect(ii))
+# restrict_output(w::CuMatrix, ii::Vector) = w[cu(ii), :]
+# restrict_output(w::CuMatrix, ii::SBitSet) = restrict_output(w, collect(ii))
 restrict_output(w::Vector, ii::SBitSet) = restrict_output(w, collect(ii))
 restrict_output(w::Vector, ii::Vector) = w[ii]
-restrict_output(w::CuVector, ii::Vector) = w[cu(ii)]
-restrict_output(w::CuVector, ii::SBitSet) = restrict_output(w, collect(ii))
+# restrict_output(w::CuVector, ii::Vector) = w[cu(ii)]
+# restrict_output(w::CuVector, ii::SBitSet) = restrict_output(w, collect(ii))
 restrict_output(x::Integer, ii) = x
 
 

@@ -13,16 +13,33 @@ which simplifies the conditioning, which is crucial operation.
 
 The conditioning is
 """
-struct BernoulliMixture{T<:Real, LP<:AbstractArray{T,3}, P<:AbstractMatrix{T}}
+# struct BernoulliMixture{T<:Real, LP<:AbstractArray{T,3}, P<:AbstractMatrix{T}}
+#     log_p::LP
+#     p::P
+# end
+
+# function BernoulliMixture(centers)
+#     log_p = logsoftmax(centers, dims = 1)
+#     p = softmax(centers, dims = 1)[2,:,:]
+#     BernoulliMixture(log_p, p)
+# end
+
+struct BernoulliMixture{T<:Real, LP<:AbstractArray{T}, P<:AbstractArray{T}}
     log_p::LP
     p::P
 end
 
-function BernoulliMixture(centers)
-    log_p = logsoftmax(centers, dims = 1)
-    p = softmax(centers, dims = 1)[2,:,:]
+function compute_mixture_params(centers)
+    log_p = logsoftmax(centers; dims = 1)
+    p = softmax(centers; dims = 1)[2, :, :]
+    return log_p, p
+end
+
+function BernoulliMixture(centers::AbstractArray)
+    log_p, p = @jit compute_mixture_params(centers)
     BernoulliMixture(log_p, p)
 end
+
 
 struct ConditionedBernoulliMixture{T<:Real,X,M<:AbstractVector{Bool},W}
     r::BernoulliMixture{T}
@@ -31,7 +48,7 @@ struct ConditionedBernoulliMixture{T<:Real,X,M<:AbstractVector{Bool},W}
     w::W
 end
 
-function condition(r::BernoulliMixture, xₛ, known_ii::SBitSet)
+function condition(r::BernoulliMixture, xₛ::AbstractVector, known_ii::SBitSet)
     idim = length(xₛ)
     mask = fill(false, idim)
     for i in known_ii
@@ -40,7 +57,7 @@ function condition(r::BernoulliMixture, xₛ, known_ii::SBitSet)
     condition(r, xₛ, mask)
 end
 
-function condition(r::BernoulliMixture, xₛ, mask::Vector{Bool})
+function condition(r::BernoulliMixture, xₛ::AbstractVector, mask::Vector{Bool})
     _xₛ = vcat((xₛ .≤ 0)', (xₛ .> 0)')
     pzx = softmax(vec(sum(mask' .* _xₛ .* r.log_p, dims = (1,2))))
     w = StatsBase.Weights(pzx)
@@ -64,7 +81,8 @@ end
     Sample `size(u,2)` samples including fixed (condition) part, which is 
     copied
 """
-function sample_all!(u, r::ConditionedBernoulliMixture)
+#INITIAN: function sample_all!(u, r::ConditionedBernoulliMixture)
+function sample_all!(u::Matrix, r::ConditionedBernoulliMixture)
     mask = r.mask
     p = r.r.p
     size(u,1) != length(mask) && error("dimension of u does not match the dimension of the sampler")
