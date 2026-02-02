@@ -71,12 +71,12 @@ function VAEAC(idim::Int, ldim::Int, h::Int)
     # Input Size: ldim(20) + idim(784) + idim(784) = 1588
     dec_in_ch = 2 + ldim
     
-    decoder = Lux.Chain(
+decoder = Lux.Chain(
         Lux.Conv((3,3), dec_in_ch => 64, relu, pad=1),
         Lux.BatchNorm(64),
-        Lux.Conv((3,3), 64 => 32, relu, pad=1),
-        Lux.BatchNorm(32),
-        Lux.Conv((3,3), 32 => 1, pad=1) 
+        Lux.Conv((3,3), 64 => 64, relu, pad=1),
+        Lux.BatchNorm(64),
+        Lux.Conv((3,3), 64 => 1, pad=1) 
     )
 
     return VAEAC(proposal, prior, decoder, idim, ldim)

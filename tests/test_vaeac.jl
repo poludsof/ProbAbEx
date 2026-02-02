@@ -7,75 +7,75 @@ using Reactant
 import Lux: σ
 
 """ ================ Imputation and Sampling ================= """
-function impute(x, mask, model, ps, st)
-    ldim = getfield(model, :ldim)
-    ε = randn(Float32, ldim, size(x, 2))
-    # st = Lux.testmode(st)
-    (logits, _, _, _, _), _ = Lux.apply(model, (x, mask, ε), ps, st)
-    σ.(logits)
-end
+# function impute(x, mask, model, ps, st)
+#     ldim = getfield(model, :ldim)
+#     ε = randn(Float32, ldim, size(x, 2))
+#     # st = Lux.testmode(st)
+#     (logits, _, _, _, _), _ = Lux.apply(model, (x, mask, ε), ps, st)
+#     σ.(logits)
+# end
 
-function sample_and_save_png(x, mask, model, ps, st; binary=true, path="vaeac_imputation.png")
-    xhat = impute(x, mask, model, ps, st)
-    g = reshape(xhat[:, 1], 28, 28)
-    m = reshape(mask[:, 1], 28, 28)
-    if binary
-        g .= ifelse.(g .> 0.5f0, 1f0, 0f0)
-    end
-    img = Array{RGB{Float32}}(undef, 28, 28)
+# function sample_and_save_png(x, mask, model, ps, st; binary=true, path="vaeac_imputation.png")
+#     xhat = impute(x, mask, model, ps, st)
+#     g = reshape(xhat[:, 1], 28, 28)
+#     m = reshape(mask[:, 1], 28, 28)
+#     if binary
+#         g .= ifelse.(g .> 0.5f0, 1f0, 0f0)
+#     end
+#     img = Array{RGB{Float32}}(undef, 28, 28)
 
-    for i in 1:28, j in 1:28
-        if m[i, j] == 1
-            img[i, j] = RGB{Float32}(0.5, 0, 0)
-            if x[(j-1)*28 + i, 1] == 1
-                img[i, j] = RGB{Float32}(1, 0, 0)
-            end
-        else
-            gray_val = clamp(g[i, j], 0, 1)
-            img[i, j] = RGB{Float32}(gray_val, gray_val, gray_val)
-        end
-    end
-    display(reverse(Base.rotr90(img), dims=2))
-end
+#     for i in 1:28, j in 1:28
+#         if m[i, j] == 1
+#             img[i, j] = RGB{Float32}(0.5, 0, 0)
+#             if x[(j-1)*28 + i, 1] == 1
+#                 img[i, j] = RGB{Float32}(1, 0, 0)
+#             end
+#         else
+#             gray_val = clamp(g[i, j], 0, 1)
+#             img[i, j] = RGB{Float32}(gray_val, gray_val, gray_val)
+#         end
+#     end
+#     display(reverse(Base.rotr90(img), dims=2))
+# end
 
-random_mask(n; D=784, rng=Random.default_rng()) = (m = falses(D); m[view(randperm(rng, D), 1:n)] .= true; m )
+# random_mask(n; D=784, rng=Random.default_rng()) = (m = falses(D); m[view(randperm(rng, D), 1:n)] .= true; m )
 
-function sample_and_save(x, mask, model, ps, st; binary=true)
-    ε = randn(Float32, getfield(model, :ldim), size(x, 2))
-    st = Lux.testmode(st)
-    (logits, _, _, _, _), _ = Lux.apply(model, (x, mask, ε), ps, st)
-    x_hat = σ.(logits)
+# function sample_and_save(x, mask, model, ps, st; binary=true)
+#     ε = randn(Float32, getfield(model, :ldim), size(x, 2))
+#     st = Lux.testmode(st)
+#     (logits, _, _, _, _), _ = Lux.apply(model, (x, mask, ε), ps, st)
+#     x_hat = σ.(logits)
 
-    grayscale_image = x_hat[:, 1] isa AbstractVector ? reshape(x_hat[:, 1], 28, 28) : x_hat
-    mask_image = mask[:, 1] isa AbstractVector ? reshape(mask[:, 1], 28, 28) : mask
+#     grayscale_image = x_hat[:, 1] isa AbstractVector ? reshape(x_hat[:, 1], 28, 28) : x_hat
+#     mask_image = mask[:, 1] isa AbstractVector ? reshape(mask[:, 1], 28, 28) : mask
 
-    if binary
-        grayscale_image .= ifelse.(grayscale_image .> 0.5, 1f0, 0f0)
-    end
+#     if binary
+#         grayscale_image .= ifelse.(grayscale_image .> 0.5, 1f0, 0f0)
+#     end
 
-    color_image = Array{RGB{Float32}}(undef, 28, 28)
+#     color_image = Array{RGB{Float32}}(undef, 28, 28)
 
-    for i in 1:28, j in 1:28
-        if mask_image[i, j] == 1
-            color_image[i, j] = RGB{Float32}(0.5, 0, 0)
-            if x[(j-1)*28 + i, 1] == 1
-                color_image[i, j] = RGB{Float32}(1, 0, 0)
-            end
-        else
-            gray_val = clamp(grayscale_image[i, j], 0, 1)
-            color_image[i, j] = RGB{Float32}(gray_val, gray_val, gray_val)
-        end
-    end
+#     for i in 1:28, j in 1:28
+#         if mask_image[i, j] == 1
+#             color_image[i, j] = RGB{Float32}(0.5, 0, 0)
+#             if x[(j-1)*28 + i, 1] == 1
+#                 color_image[i, j] = RGB{Float32}(1, 0, 0)
+#             end
+#         else
+#             gray_val = clamp(grayscale_image[i, j], 0, 1)
+#             color_image[i, j] = RGB{Float32}(gray_val, gray_val, gray_val)
+#         end
+#     end
 
-    fig = Figure(size = (400, 400))
-    ax = Axis(fig[1, 1], title = "Masked MNIST Reconstruction", yreversed = true) #, aspect = DataAspect())
-    image!(ax, color_image, interpolate = false)
-    hidespines!(ax)
-    hidedecorations!(ax)
+#     fig = Figure(size = (400, 400))
+#     ax = Axis(fig[1, 1], title = "Masked MNIST Reconstruction", yreversed = true) #, aspect = DataAspect())
+#     image!(ax, color_image, interpolate = false)
+#     hidespines!(ax)
+#     hidedecorations!(ax)
 
-    save("vaeac_image.png", fig)
+#     save("vaeac_image.png", fig)
 
-end
+# end
 
 """ ================ Save and Load Model ================= """
 # JLS
@@ -91,27 +91,27 @@ function save_vaeac_model(filename, model, ps, st)
 end
 
 """ ========= Create and train model ========= """
-ts = PAE.train_vaeac(epochs=50, lr=0.001f0, batch_size=100)
+# ts = PAE.train_vaeac(epochs=50, lr=0.001f0, batch_size=100)
 
-# model, ps, st = deserialize(joinpath(@__DIR__, "..", "models", "mnist_vaeac_conv_model.jls"))
+model, ps, st = deserialize(joinpath(@__DIR__, "..", "models", "mnist_vaeac_conv_model.jls"))
 # model, ps, st = deserialize("models/mnist_vaeac_conv_model.jls")
 # # print fields of ts: model, parameters, states, optimizer
 # println("Fields of the __: ", fieldnames(typeof(ts)))
 
 
 """ ================ Imputation and Sampling ================= """
-to_cpu(x) = x
-to_cpu(x::AbstractArray) = Array(x)
-to_cpu(nt::NamedTuple) = NamedTuple{keys(nt)}(map(to_cpu, values(nt)))
-to_cpu(t::Tuple) = map(to_cpu, t)
-# to_cpu(ts) = Lux.Training.TrainState(ts.model, to_cpu(ts.parameters), to_cpu(ts.states), ts.optimizer)
+# to_cpu(x) = x
+# to_cpu(x::AbstractArray) = Array(x)
+# to_cpu(nt::NamedTuple) = NamedTuple{keys(nt)}(map(to_cpu, values(nt)))
+# to_cpu(t::Tuple) = map(to_cpu, t)
+# # to_cpu(ts) = Lux.Training.TrainState(ts.model, to_cpu(ts.parameters), to_cpu(ts.states), ts.optimizer)
 
-ps = to_cpu(ts.parameters)
-st = to_cpu(ts.states)
-model = ts.model
+# ps = to_cpu(ts.parameters)
+# st = to_cpu(ts.states)
+# model = ts.model
 
-x_cpu = to_cpu(reshape(Float32.(PAE.load_binary_mnist_matrix()[:, 1]), :, 1))
-mask = reshape(Float32.(random_mask(50; D=784)), :, 1)
+# x_cpu = to_cpu(reshape(Float32.(PAE.load_binary_mnist_matrix()[:, 1]), :, 1))
+# mask = reshape(Float32.(random_mask(50; D=784)), :, 1)
 
 # # x_img = sample_and_save_png(x_cpu, mask, model, ps, st; binary=true)
 # x_img2 = sample_and_save(x_cpu, mask, model, ps, st, binary=true)
