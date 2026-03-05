@@ -1,167 +1,168 @@
 
-struct VAEACSampler{M,P,S}
+struct VAEACSampler{M,P,S,D}
     model::M
     ps::P
     st::S
+    dev::D
 end
 
-function VAEACSampler(train_state)
-    model, ps, st = train_state.model, train_state.ps, train_state.st
-    VAEACSampler(model, ps, st)
-end
-
-struct ConditionedVAEAC{R,X,M}
-    r::R
+struct ConditionedVAEAC{S,X,M<:AbstractVector{Bool}}
+    r::S
     xₛ::X
     mask::M
 end
 
-function condition(r::VAEACSampler, xₛ, known_ii::SBitSet)
+function load_vaeac_sampler(path, dev)
+    m, ps, st = deserialize(path)
+    ps = ps |> dev
+    st = Lux.testmode(st) |> dev
+    VAEACSampler(m, ps, st, dev)
+end
+
+function condition(r::VAEACSampler, xₛ::AbstractVector, known_ii::SBitSet)
     idim = length(xₛ)
+    idim == 28*28 || error("VAEAC sampler expects idim = 784")
     mask = fill(false, idim)
     for i in known_ii
         mask[i] = true
     end
-    ConditionedVAEAC(r, xₛ, mask)
+    ConditionedVAEAC(r, Float32.(xₛ), mask)
 end
 
-function condition(r::VAEACSampler, xₛ, mask::Vector{Bool})
-    ConditionedVAEAC(r, xₛ, mask)
-end
+condition(r::VAEACSampler, xₛ::AbstractVector, mask::Vector{Bool}) =
+    ConditionedVAEAC(r, Float32.(xₛ), mask)
 
-"""
-    sample_all(r::AbstractSampler, n::Integer)
+# function sample_all(r::ConditionedVAEAC, n::Integer; binary=true)
+#     # println("Sampling $n samples with VAEAC sampler...")
+#     xₛ = clamp.(r.xₛ, 0f0, 1f0)
+#     maskb = r.mask
+#     idim = length(xₛ)
+#     idim == 28*28 || error("VAEAC sampler expects idim = 784")
 
-    Sample `n` samples including fixed (condition) part, which is 
-    copied
-"""
-function sample_all(r::ConditionedVAEAC, n::Integer)
-    u = zeros(Float32, length(r.xₛ), n)
-    sample_all!(u, r)
-end
+#     x_img_cpu = reshape(xₛ, 28, 28)
+#     m2_cpu = reshape(Float32.(maskb), 28, 28)
 
-"""
-    sample_all!(u, r::AbstractSampler)
+#     x01_d = reshape(xₛ, 28, 28, 1, 1) |> r.r.dev
+#     m_d   = reshape(Float32.(maskb), 28, 28, 1, 1) |> r.r.dev
 
-    Sample `size(u,2)` samples including fixed (condition) part, which is 
-    copied
-"""
-function sample_all!(u, r::ConditionedVAEAC)
-    mk = r.mask
-    n  = size(u, 2)
-    
-    x_val_cpu = Array(r.xₛ) 
-    m_val_cpu = Array(mk)
+#     x01_B = x01_d .* ones(Float32, 1, 1, 1, n) |> r.r.dev
+#     m_B   = m_d   .* ones(Float32, 1, 1, 1, n) |> r.r.dev
+#     x_masked = x01_B .* m_B
 
-    x_batch_cpu = repeat(reshape(Float32.(x_val_cpu), :, 1), 1, n)
-    m_batch_cpu = repeat(reshape(Float32.(m_val_cpu), :, 1), 1, n)
+#     # prior_in = cat(x_masked, m_B, dims=3)
+#     e1 = reshape(Float32[1, 0], 1, 1, 2, 1) |> r.r.dev
+#     e2 = reshape(Float32[0, 1], 1, 1, 2, 1) |> r.r.dev
 
-    dev = ProbAbEx.reactant_device()
-    x_dev = dev(x_batch_cpu)
-    m_dev = dev(m_batch_cpu)
+#     prior_in = x_masked .* e1 .+ m_B .* e2
+#     prior_out, _ = Lux.apply(r.r.model.prior, prior_in, r.r.ps.prior, r.r.st.prior)
 
-    x_hat_dev = impute!(r.r.model, r.r.ps, r.r.st, x_dev, m_dev)
+#     ldim = r.r.model.ldim
+#     μp = @view prior_out[1:ldim, :]
+#     logσp = clamp.(@view(prior_out[ldim+1:end, :]), -5f0, 3f0)
 
-    x_hat_cpu = Array(x_hat_dev)
-    u .= ifelse.(x_hat_cpu .> 0.5f0, 1f0, -1f0)
-    
-    return u
-end
+#     ε = (randn(Float32, size(μp))) #|> r.r.dev)
+#     z = μp .+ exp.(logσp) .* ε
 
-# function impute!(model, ps, st, x::AbstractMatrix, m::AbstractMatrix)
-#     ldim = getfield(model, :ldim)
-#     ε = randn(Float32, ldim, size(x, 2))
-#     (logits, μq, logσq, μp, logσp), _ = Lux.apply(model, (x, m, ε), ps, st)
-#     return σ.(logits)
+#     z_reshaped = reshape(z, 1, 1, ldim, n)
+#     z_tiled = repeat(z_reshaped, 28, 28, 1, 1)
+
+#     dec_in = cat(x_masked, m_B, z_tiled, dims=3)
+#     logits_spatial, _ = Lux.apply(r.r.model.decoder, dec_in, r.r.ps.decoder, r.r.st.decoder)
+
+#     probs = Lux.sigmoid.(logits_spatial)
+#     probs_cpu = reshape(Array(probs), 28, 28, n)
+
+#     gen = binary ? Float32.(rand(Float32, 28, 28, n) .< probs_cpu) : Float32.(probs_cpu)
+
+#     out = similar(gen)
+#     miss = 1f0 .- m2_cpu
+#     for k in 1:n
+#         out[:, :, k] .= x_img_cpu .* m2_cpu .+ gen[:, :, k] .* miss
+#     end
+#     out
 # end
 
-to01(x) = (x .+ 1f0) ./ 2f0 # from [-1,1] to [0,1]
-from01(x) = 2f0 .* x .- 1f0 # from [0,1] to [-1,1]
+function sample_all_core(prior, decoder, ldim, x01_B, m_B, ε, u, ps_prior, st_prior, ps_dec, st_dec, binary::Bool)
+    x_masked = x01_B .* m_B
 
-# function impute!(model, ps, st, x::AbstractMatrix, m::AbstractMatrix)
-#     dev = ProbAbEx.reactant_device()
-#     x_dev = dev(x)    # safe even if x already on device (may be a no-op or copy)
-#     m_dev = dev(m)
-#     ldim = getfield(model, :ldim)
-#     ε = dev(randn(Float32, ldim, size(x_dev, 2)))    # noise on same device
-#     (logits, μq, logσq, μp, logσp), _ = Lux.apply(model, (x_dev, m_dev, ε), ps, st)
-#     return σ.(logits)
-# end
+    e_x2 = reshape(Float32[1, 0], 1, 1, 2, 1)
+    e_m2 = reshape(Float32[0, 1], 1, 1, 2, 1)
+    prior_in = x_masked .* e_x2 .+ m_B .* e_m2
 
-# helper to move nested params/state to device and materialize arrays
-function move_to_device(x, dev)
-    if x isa AbstractArray
-        xa = dev(x)
-        return copy(xa)
-    elseif x isa NamedTuple
-        kv = values(x)
-        newvals = ntuple(i -> move_to_device(kv[i], dev), length(kv))
-        return NamedTuple{keys(x)}(newvals)
-    elseif x isa Tuple
-        return tuple(move_to_device.(collect(x), Ref(dev))...)
-    elseif x isa Dict
-        d = Dict{Any,Any}()
-        for (k,v) in x
-            d[k] = move_to_device(v, dev)
-        end
-        return d
-    else
-        return dev(x)
+    prior_out, _ = Lux.apply(prior, prior_in, ps_prior, st_prior)
+
+    Sμ = zeros(Float32, ldim, 2ldim)
+    for i in 1:ldim
+        Sμ[i, i] = 1f0
     end
-end
-
-# robust CPU-side reshape helper: infers channels automatically
-function reshape_proposal_cpu(x_cpu::AbstractMatrix; H::Int=28, W::Int=28)
-    D, N = size(x_cpu)
-    hw = H * W
-    if D % hw != 0
-        error("reshape_proposal_cpu: flattened dimension D=$D is not divisible by H*W=$hw")
-    end
-    C = div(D, hw)
-    return reshape(x_cpu, H, W, C, N)
-end
-
-# device-safe impute! that handles both flattened (D,N) and shaped (H,W,C,N)
-function impute!(model, ps, st, x::AbstractArray, m::AbstractArray; H::Int=28, W::Int=28)
-    dev = ProbAbEx.reactant_device()
-
-    # 1) Bring to CPU so reshape is performed on host (avoids device ReshapedArray copy iteration)
-    x_cpu = Array(x)
-    m_cpu = Array(m)
-
-    # 2) If flattened (D,N) or D divisible by H*W, reshape on CPU to (H,W,C,N) and then transfer
-    D, N_cpu = size(x_cpu)
-    if D % (H * W) == 0
-        x_img_cpu = reshape_proposal_cpu(x_cpu; H=H, W=W)
-        m_img_cpu = reshape_proposal_cpu(m_cpu; H=H, W=W)
-        x_use = dev(x_img_cpu)    # bulk transfer to device -> ConcretePJRTArray{Float32,4,1}
-        m_use = dev(m_img_cpu)
-    else
-        # leave flattened, transfer as (D,N)
-        x_use = dev(x_cpu)        # ConcretePJRTArray{Float32,2,1}
-        m_use = dev(m_cpu)
+    Sσ = zeros(Float32, ldim, 2ldim)
+    for i in 1:ldim
+        Sσ[i, ldim + i] = 1f0
     end
 
-    # 3) move params/state to device
-    ps_dev = move_to_device(ps, dev)
-    st_dev = move_to_device(st, dev)
+    μp    = Sμ * prior_out
+    logσp = clamp.(Sσ * prior_out, -5f0, 3f0)
 
-    # 4) infer batch size N robustly: for shaped arrays N is last dim, for 2D it's second dim
-    nd = ndims(x_use)
-    N = nd == 2 ? size(x_use, 2) : size(x_use, nd)
+    z = μp .+ exp.(logσp) .* ε
 
-    # 5) noise on device with correct batch dimension
-    ldim = getfield(model, :ldim)
-    ε = dev(randn(Float32, ldim, N))
-    ε = copy(ε)   # ensure concrete device buffer
+    onesHW = ones(Float32, 28, 28, 1, 1)
+    z_reshaped = reshape(z, 1, 1, ldim, size(z, 2))
+    z_tiled = onesHW .* z_reshaped
 
-    @info "impute! inputs types" typeof(x_use) typeof(m_use) typeof(ε)
-    @info "impute! sizes" size(x_use) size(m_use) size(ε)
+    C = 2 + ldim
+    e_x = reshape(vcat(1f0, zeros(Float32, C - 1)), 1, 1, C, 1)
+    e_m = reshape(vcat(0f0, 1f0, zeros(Float32, C - 2)), 1, 1, C, 1)
 
-    (logits, μq, logσq, μp, logσp), _ = Lux.apply(model, (x_use, m_use, ε), ps_dev, st_dev)
+    E = zeros(Float32, C, ldim)
+    for j in 1:ldim
+        E[2 + j, j] = 1f0
+    end
+    E = reshape(E, 1, 1, C, ldim, 1)
 
-    return σ.(logits)
+    z5 = reshape(z_tiled, 28, 28, 1, ldim, size(z, 2))
+    z_C = sum(E .* z5, dims=4)
+    z_C = reshape(z_C, 28, 28, C, size(z, 2))
+
+    dec_in = x_masked .* e_x .+ m_B .* e_m .+ z_C
+    logits_spatial, _ = Lux.apply(decoder, dec_in, ps_dec, st_dec)
+
+    probs = Lux.sigmoid.(logits_spatial)
+
+    gen = binary ? Float32.(u .< probs) : Float32.(probs)
+
+    out = x01_B .* m_B .+ gen .* (1f0 .- m_B)
+    reshape(out, 28, 28, size(out, 4))
 end
-function ShapleyHeuristic(sm, sampler, num_samples, verbose = false)
-    ShapleyHeuristic(sm, sampler, num_samples, verbose)
+
+function sample_all_compiled(r::ConditionedVAEAC, compiled_sample, n::Integer; binary=true)
+    dev = r.r.dev
+    ldim = r.r.model.ldim
+
+    xₛ = clamp.(r.xₛ, 0f0, 1f0)
+    maskb = r.mask
+
+    x01 = reshape(xₛ, 28, 28, 1, 1) |> dev
+    m1  = reshape(Float32.(maskb), 28, 28, 1, 1) |> dev
+
+    onesB = ones(Float32, 1, 1, 1, n) |> dev
+    x01_B = x01 .* onesB
+    m_B   = m1  .* onesB
+
+    ε = randn(Float32, ldim, n) |> dev
+    u = rand(Float32, 28, 28, 1, n) |> dev
+
+    compiled_sample(
+        r.r.model.prior,
+        r.r.model.decoder,
+        ldim,
+        x01_B,
+        m_B,
+        ε,
+        u,
+        r.r.ps.prior,
+        r.r.st.prior,
+        r.r.ps.decoder,
+        r.r.st.decoder,
+        binary
+    )
 end

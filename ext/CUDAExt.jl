@@ -35,6 +35,7 @@ function ProbAbEx.condition(r::BernoulliMixture{<:Any,<:CuArray,<:CuMatrix}, x�
 end
 
 function ProbAbEx.sample_all(r::ConditionedBernoulliMixture{<:Any, <:CuArray, <:CuArray}, n::Integer)
+    println("Sampling $n samples from ConditionedBernoulliMixture on CUDA device...")
     mask = r.mask
     p = r.r.p
     xₛ = r.xₛ

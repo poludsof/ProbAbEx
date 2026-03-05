@@ -3,111 +3,79 @@ module ReactantExt
 using ProbAbEx
 using Reactant
 using ProbAbEx.StaticBitSets
-using ProbAbEx.StatsBase
-using Flux: softmax
-using ProbAbEx: ConditionedUniformDistribution, UniformDistribution,
-               ConditionedBernoulliMixture, BernoulliMixture, condition
+using NNlib: softmax
 
-# Use the helper from ProbAbEx (you already use this elsewhere)
-const rdev = ProbAbEx.reactant_device()
+const _L_CACHE = Dict{Int, Any}()
+const _SAMPLE_KERNEL = Dict{Tuple{Int,Int,Int}, Any}()
 
-############################
-#   Conditioned Uniform
-############################
-@inline function ProbAbEx.condition(r::UniformDistribution,
-                                    xₛ::AbstractArray,
-                                    known_ii::SBitSet)
-    # Use the existing CPU implementation, then move probabilities to Reactant device
-    cond = condition(r, Array(xₛ), known_ii)
-    ConditionedUniformDistribution(rdev(cond.p))
+function _get_L(K::Int)
+    L = get(_L_CACHE, K, nothing)
+    if L === nothing
+        L_cpu = tril(ones(Float32, K, K))
+        L = ConcretePJRTArray(L_cpu)
+        _L_CACHE[K] = L
+    end
+    L
 end
 
-@inline function ProbAbEx.sample_all(r::ConditionedUniformDistribution{<:AbstractVector},
-                                     n::Integer)
-    # r.p is already on the Reactant device (because of condition above)
-    p = r.p
-    # create random matrix on host, then move to same device
-    x = rdev(rand(eltype(p), length(p), n))
-
-    _f(xᵢ, pᵢ) = 2 * (xᵢ < pᵢ) - 1
-    _f.(x, p)
+function condition_logits_gpu(log_p, x_s, mask)
+    x01 = vcat((x_s .<= 0)', (x_s .> 0)')
+    vec(sum(transpose(mask) .* x01 .* log_p; dims=(1,2)))
 end
 
-############################
-#   Conditioned BernoulliMixture
-##########################
+function sample_all_from_logits(p, logits, mask, x_s, L, n::Int)
+    probs = softmax(logits)
+    cs = L * reshape(probs, :, 1)
 
-# condition:
-function ProbAbEx.condition(r::ProbAbEx.BernoulliMixture, 
-                            xₛ::ConcretePJRTArray,
-                            known_ii::SBitSet )
-    idim = length(xₛ)
-    mask = fill(false, idim)
+    u_mix = rand(Float32, 1, n)
+    idx = vec(sum(cs .< u_mix; dims=1) .+ 1)
+
+    p_sel = p[:, idx]
+    u = rand(Float32, size(p_sel))
+    raw = 2f0 .* (u .< p_sel) .- 1f0
+
+    ifelse.(mask, Float32.(x_s), raw)
+end
+
+function _get_sample_kernel(D::Int, K::Int, n::Int)
+    key = (D, K, n)
+    f = get(_SAMPLE_KERNEL, key, nothing)
+    if f === nothing
+        p0 = ConcretePJRTArray(zeros(Float32, D, K))
+        logits0 = ConcretePJRTArray(zeros(Float32, K))
+        mask0 = ConcretePJRTArray(fill(false, D))
+        x0 = ConcretePJRTArray(zeros(Float32, D))
+        L0 = _get_L(K)
+        f = Reactant.@compile sample_all_from_logits(p0, logits0, mask0, x0, L0, n)
+        _SAMPLE_KERNEL[key] = f
+    end
+    f
+end
+
+function ProbAbEx.condition(r::ProbAbEx.BernoulliMixture, x_s::ConcretePJRTArray, known_ii::SBitSet)
+    D = length(x_s)
+    mask_cpu = fill(false, D)
     for i in known_ii
-        mask[i] = true
+        mask_cpu[i] = true
     end
-    ProbAbEx.condition(r, xₛ, mask)
+    mask = ConcretePJRTArray(mask_cpu)
+    logits = @jit condition_logits_gpu(r.log_p, x_s, mask)
+    ProbAbEx.ConditionedBernoulliMixture(r, x_s, mask, logits)
 end
 
-function compute_condition_probs(log_p, xₛ, mask)
-    _xₛ = vcat((xₛ .≤ 0)', (xₛ .> 0)')
-    mask_T = transpose(mask)
-    logits = vec(sum(mask_T .* _xₛ .* log_p; dims = (1, 2)))
-    return softmax(logits)
+function ProbAbEx.sample_all(r::ProbAbEx.ConditionedBernoulliMixture, n::Integer)
+    D = size(r.r.p, 1)
+    K = size(r.r.p, 2)
+    L = _get_L(K)
+    f = _get_sample_kernel(D, K, Int(n))
+    f(r.r.p, r.w, r.mask, r.xₛ, L, Int(n))
 end
 
-function ProbAbEx.condition(r::ProbAbEx.BernoulliMixture, 
-                            xₛ::ConcretePJRTArray,
-                            mask::Vector{Bool} )
-    if !(mask isa ConcretePJRTArray)
-        mask_gpu = ConcretePJRTArray(mask)
-    else
-        mask_gpu = mask
-    end
-
-    pzx_gpu = @jit compute_condition_probs(r.log_p, xₛ, mask_gpu)
-    pzx_cpu = Array(pzx_gpu) 
-    w = StatsBase.Weights(pzx_cpu)
-    ProbAbEx.ConditionedBernoulliMixture(r, xₛ, mask_gpu, w)
-end
-
-# sample_all:
-function compute_samples_batch(p, mask, x_cond, cids)
-    T = eltype(p)
-    p_selected = p[:, cids]
-    unif = rand(T, size(p_selected))
-    val_2 = T(2)
-    val_1 = T(1)
-    raw_samples = val_2 .* (unif .< p_selected) .- val_1
-    x_cond_casted = T.(x_cond)
-    return ifelse.(mask, x_cond_casted, raw_samples)
-end
-# function compute_samples_batch(p, mask, x_cond, cids)
-#     p_selected = p[:, cids]
-#     unif = rand(eltype(p), size(p_selected))
-#     raw_samples = 2.0f0 .* (unif .< p_selected) .- 1.0f0
-#     return ifelse.(mask, x_cond, raw_samples)
-# end
-
-function sample_all(::ProbAbEx.ConditionedBernoulliMixture{T, <:ConcretePJRTArray}, n::Integer) where T
-    cids_cpu = StatsBase.sample(r.w, n)
-    cids_gpu = ConcretePJRTArray(cids_cpu)
-    samples_gpu = @jit compute_samples_batch(r.r.p, r.mask, r.xₛ, cids_gpu)
-    return samples_gpu
-end
-
-function ProbAbEx.sample_all!(
-    u::ConcretePJRTArray, 
-    r::ProbAbEx.ConditionedBernoulliMixture{T, <:ConcretePJRTArray}
-) where T
+function ProbAbEx.sample_all!(u::ConcretePJRTArray, r::ProbAbEx.ConditionedBernoulliMixture)
     n = size(u, 2)
-    cids_cpu = StatsBase.sample(r.w, n)
-    cids_gpu = ConcretePJRTArray(cids_cpu)
-    
-    new_samples = @jit compute_samples_batch(r.r.p, r.mask, r.xₛ, cids_gpu)
-    copyto!(u, new_samples)
-    
-    return u
+    x = ProbAbEx.sample_all(r, n)
+    copyto!(u, x)
+    u
 end
 
 end

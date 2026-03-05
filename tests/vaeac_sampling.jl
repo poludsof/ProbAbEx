@@ -1,3 +1,6 @@
+import ProbAbEx as PAE
+using Serialization, Random, Lux, Base, NNlib, MLDatasets, StaticBitSets
+using ColorTypes
 using CairoMakie
 
 function sample_and_save_styled(x_cpu, mask_cpu, model, ps, st; binary=false, filename="vaeac_styled.png")
@@ -134,9 +137,11 @@ to_cpu(nt::NamedTuple) = NamedTuple{keys(nt)}(map(to_cpu, values(nt)))
 to_cpu(t::Tuple) = map(to_cpu, t)
 # to_cpu(ts) = Lux.Training.TrainState(ts.model, to_cpu(ts.parameters), to_cpu(ts.states), ts.optimizer)
 
-ps = to_cpu(ts.parameters)
-st = to_cpu(ts.states)
-model = ts.model
+model, ps, st = deserialize(joinpath(@__DIR__, "..", "models", "use_this_vaeac.jls"))
+
+ps = to_cpu(ps)
+st = to_cpu(st)
+model = to_cpu(model)
 
 x_raw = PAE.load_binary_mnist_matrix()[:, 6]
 x_cpu = reshape(Float32.(x_raw), :, 1)
@@ -144,4 +149,4 @@ x_cpu = reshape(Float32.(x_raw), :, 1)
 mask_raw = rand(Float32, 784) .> 0.8
 mask = reshape(Float32.(mask_raw), :, 1)
 
-sample_and_save_styled(x_cpu, mask, model, ps, st, binary=false, filename="vaeac_styled_non_binary.png")
+sample_and_save_styled(x_cpu, mask, model, ps, st, binary=false, filename="test_test_test.png")

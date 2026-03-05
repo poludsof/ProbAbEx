@@ -71,6 +71,7 @@ end
     copied
 """
 function sample_all(r::ConditionedBernoulliMixture, n::Integer)
+    println("Sampling $n samples from ConditionedBernoulliMixture...")
     u = similar(r.xₛ, length(r.xₛ), n)
     sample_all!(u, r)
 end

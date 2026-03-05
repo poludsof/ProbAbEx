@@ -1,126 +1,9 @@
-using ColorTypes: RGB
-using ColorTypes: Gray, heatmap!
-using CairoMakie: Figure, Axis, image!, hidespines!, hidedecorations!, save
 import ProbAbEx as PAE
 using Serialization, Random, Optimisers, Lux, Base, NNlib, MLDatasets, StaticBitSets
 using Reactant
+using TimerOutputs
 import Lux: σ
 
-""" ================ Imputation and Sampling ================= """
-# function impute(x, mask, model, ps, st)
-#     ldim = getfield(model, :ldim)
-#     ε = randn(Float32, ldim, size(x, 2))
-#     # st = Lux.testmode(st)
-#     (logits, _, _, _, _), _ = Lux.apply(model, (x, mask, ε), ps, st)
-#     σ.(logits)
-# end
-
-# function sample_and_save_png(x, mask, model, ps, st; binary=true, path="vaeac_imputation.png")
-#     xhat = impute(x, mask, model, ps, st)
-#     g = reshape(xhat[:, 1], 28, 28)
-#     m = reshape(mask[:, 1], 28, 28)
-#     if binary
-#         g .= ifelse.(g .> 0.5f0, 1f0, 0f0)
-#     end
-#     img = Array{RGB{Float32}}(undef, 28, 28)
-
-#     for i in 1:28, j in 1:28
-#         if m[i, j] == 1
-#             img[i, j] = RGB{Float32}(0.5, 0, 0)
-#             if x[(j-1)*28 + i, 1] == 1
-#                 img[i, j] = RGB{Float32}(1, 0, 0)
-#             end
-#         else
-#             gray_val = clamp(g[i, j], 0, 1)
-#             img[i, j] = RGB{Float32}(gray_val, gray_val, gray_val)
-#         end
-#     end
-#     display(reverse(Base.rotr90(img), dims=2))
-# end
-
-# random_mask(n; D=784, rng=Random.default_rng()) = (m = falses(D); m[view(randperm(rng, D), 1:n)] .= true; m )
-
-# function sample_and_save(x, mask, model, ps, st; binary=true)
-#     ε = randn(Float32, getfield(model, :ldim), size(x, 2))
-#     st = Lux.testmode(st)
-#     (logits, _, _, _, _), _ = Lux.apply(model, (x, mask, ε), ps, st)
-#     x_hat = σ.(logits)
-
-#     grayscale_image = x_hat[:, 1] isa AbstractVector ? reshape(x_hat[:, 1], 28, 28) : x_hat
-#     mask_image = mask[:, 1] isa AbstractVector ? reshape(mask[:, 1], 28, 28) : mask
-
-#     if binary
-#         grayscale_image .= ifelse.(grayscale_image .> 0.5, 1f0, 0f0)
-#     end
-
-#     color_image = Array{RGB{Float32}}(undef, 28, 28)
-
-#     for i in 1:28, j in 1:28
-#         if mask_image[i, j] == 1
-#             color_image[i, j] = RGB{Float32}(0.5, 0, 0)
-#             if x[(j-1)*28 + i, 1] == 1
-#                 color_image[i, j] = RGB{Float32}(1, 0, 0)
-#             end
-#         else
-#             gray_val = clamp(grayscale_image[i, j], 0, 1)
-#             color_image[i, j] = RGB{Float32}(gray_val, gray_val, gray_val)
-#         end
-#     end
-
-#     fig = Figure(size = (400, 400))
-#     ax = Axis(fig[1, 1], title = "Masked MNIST Reconstruction", yreversed = true) #, aspect = DataAspect())
-#     image!(ax, color_image, interpolate = false)
-#     hidespines!(ax)
-#     hidedecorations!(ax)
-
-#     save("vaeac_image.png", fig)
-
-# end
-
-""" ================ Save and Load Model ================= """
-# JLS
-function save_vaeac_model(filename, model, ps, st)
-    cdev = cpu_device()
-    ps_cpu = cdev(ps)
-    st_cpu = cdev(st)
-    print("Saving model to $filename ... ")
-    open(filename, "w") do io
-        serialize(io, (model, ps_cpu, st_cpu))
-    end
-    println("Done!")
-end
-
-""" ========= Create and train model ========= """
-# ts = PAE.train_vaeac(epochs=50, lr=0.001f0, batch_size=100)
-
-model, ps, st = deserialize(joinpath(@__DIR__, "..", "models", "mnist_vaeac_conv_model.jls"))
-# model, ps, st = deserialize("models/mnist_vaeac_conv_model.jls")
-# # print fields of ts: model, parameters, states, optimizer
-# println("Fields of the __: ", fieldnames(typeof(ts)))
-
-
-""" ================ Imputation and Sampling ================= """
-# to_cpu(x) = x
-# to_cpu(x::AbstractArray) = Array(x)
-# to_cpu(nt::NamedTuple) = NamedTuple{keys(nt)}(map(to_cpu, values(nt)))
-# to_cpu(t::Tuple) = map(to_cpu, t)
-# # to_cpu(ts) = Lux.Training.TrainState(ts.model, to_cpu(ts.parameters), to_cpu(ts.states), ts.optimizer)
-
-# ps = to_cpu(ts.parameters)
-# st = to_cpu(ts.states)
-# model = ts.model
-
-# x_cpu = to_cpu(reshape(Float32.(PAE.load_binary_mnist_matrix()[:, 1]), :, 1))
-# mask = reshape(Float32.(random_mask(50; D=784)), :, 1)
-
-# # x_img = sample_and_save_png(x_cpu, mask, model, ps, st; binary=true)
-# x_img2 = sample_and_save(x_cpu, mask, model, ps, st, binary=true)
-
-""" ================ Save and Load Model ================= """
-
-# save_vaeac_model("models/mnist_vaeac_conv_model.jls", ts.model, ts.parameters, ts.states)
-
-# ts2 = load_vaeac_jls("models/mnist_vaeac_model_50.jls"; lr=0.001f0)
 
 """ ================ Search ================= """
 function get_mnist_data()
@@ -157,33 +40,114 @@ end
 include("/home/sofia/ProbAbEx/ext/ReactantExt.jl")
 
 Reactant.set_default_backend("gpu")
-dev = reactant_device()
+dev = reactant_device(; force=true)
 
-model = deserialize(joinpath(@__DIR__, "..", "models", "mnist_conv_model.jls")) |> dev
-# # is_on_gpu = all(p -> p isa CUDA.CuArray, Flux.params(model))
+model_cls, ps_cls, st_cls = deserialize(joinpath(@__DIR__, "..", "models", "mnist_conv_model.jls"))
+ps_dev = ps_cls |> dev
+st_dev = Lux.testmode(st_cls) |> dev
+
+infer(model, x, ps, st) = first(Lux.apply(model, x, ps, st))
+
+x0 = zeros(Float32, 28, 28, 1, 1) |> dev
+compiled_infer = @compile infer(model_cls, x0, ps_dev, st_dev)
+
+nn1(x) = compiled_infer(model_cls, x, ps_dev, st_dev)
 
 train_X_bin_neg, train_y, test_X_bin_neg, test_y = get_mnist_data()
-xₛ = train_X_bin_neg[:, 2] |> dev
+xₛ = Float32.(train_X_bin_neg[:, 2])
+x_matrix = reshape(xₛ, 28, 28, 1, 1) |> dev
 yₛ =  argmax(train_y[:, 2])
-sm = PAE.Subset_minimal(model, xₛ, yₛ)
+sm = PAE.Subset_minimal(nn1, xₛ, yₛ)
 
-II = init_sbitset(length(xₛ))
-# #or for backward
-# # II = init_full_sbitset(xₛ)
+logits = Array(vec(sm.nn(x_matrix)))
+pred_digit = argmax(logits) - 1
+println("Predicted label: ", pred_digit, " True label: ", yₛ)
+
+
 
 # #? sampler
-# sampler = PAE.UniformDistribution()
-sampler = PAE.BernoulliMixture(dev(deserialize(joinpath(@__DIR__, "..", "models", "milan_centers.jls"))))
-# vaeac, ps, st = deserialize(joinpath(@__DIR__, "..", "models", "mnist_vaeac_conv_model.jls")) |> dev
-# vaeac = vaeac |> dev
-# ps    = ps    |> dev
-# st    = st    |> dev
-# sampler = PAE.VAEACSampler(vaeac, ps, st)
+sampler = PAE.load_vaeac_sampler(joinpath(@__DIR__, "..", "models", "use_this_vaeac.jls"), dev)
 
 #? run search
 #! add TIME
-println("Fields of sm.nn: ", fieldnames(typeof(sm.nn)))
-# solution_subsets = PAE.forward_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.3, sampler, 100), PAE.ShapleyHeuristic(sm, sampler, 100); refine_with_backward = false, terminate_on_first_solution=true)
+# println("Fields of sm.nn: ", typeof(sm.nn))
+# solution_subsets = PAE.forward_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.1, sampler, 10), PAE.ShapleyHeuristic(sm, sampler, 10); refine_with_backward = false, terminate_on_first_solution=true)
+
+
+
+dev = sampler.dev
+ldim = sampler.model.ldim
+
+number_of_samples = 5000
+
+x01_B0 = zeros(Float32, 28, 28, 1, number_of_samples) |> dev
+m_B0   = zeros(Float32, 28, 28, 1, number_of_samples) |> dev
+ε0     = zeros(Float32, ldim, number_of_samples) |> dev
+u0     = zeros(Float32, 28, 28, 1, number_of_samples) |> dev
+
+compiled_sample = Reactant.@compile PAE.sample_all_core(
+    sampler.model.prior,
+    sampler.model.decoder,
+    ldim,
+    x01_B0,
+    m_B0,
+    ε0,
+    u0,
+    sampler.ps.prior,
+    sampler.st.prior,
+    sampler.ps.decoder,
+    sampler.st.decoder,
+    true
+)
+
+
+II = init_sbitset(length(xₛ), 50)
+r = PAE.condition(sampler, xₛ, II)
+# x = PAE.sample_all(r, 100)
+x = PAE.sample_all_compiled(r, compiled_sample, number_of_samples; binary=true)
+@show size(x)
+
+
+using ColorTypes, FileIO
+function save_samples_grid(x::AbstractArray{<:Real,3};
+                           filename::AbstractString="samples_grid.png",
+                           ncols::Int=5,
+                           pad::Int=2)
+
+    h, w, n = size(x)
+    ncols = min(ncols, n)
+    nrows = cld(n, ncols)
+
+    H = nrows*h + (nrows+1)*pad
+    W = ncols*w + (ncols+1)*pad
+
+    out = fill(ColorTypes.RGB{Float32}(0,0,0), H, W)
+
+    for k in 1:n
+        r = (k-1) ÷ ncols
+        c = (k-1) % ncols
+        y0 = r*h + (r+1)*pad + 1
+        x0 = c*w + (c+1)*pad + 1
+        img = clamp.(Float32.(x[:, :, k]), 0f0, 1f0)
+        out[y0:y0+h-1, x0:x0+w-1] .= RGB{Float32}.(img, img, img)
+    end
+
+    save(filename, out)
+    filename
+end
+# save_samples_grid(x; filename="vaeac_samples.png", ncols=5)
+
+
+# const to = TimerOutput()
+# reset_timer!(to)
+# PAE.accuracy_sdp(II, sm, sampler, 100)   # warmup
+# reset_timer!(to)
+# for _ in 1:5
+#     PAE.accuracy_sdp(II, sm, sampler, 100)
+# end
+# show(Main.to)
+
+
 
 
 function  get_image(img_i)

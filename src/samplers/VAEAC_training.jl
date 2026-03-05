@@ -181,6 +181,7 @@ end
 make_loader(x; batchsize=128, shuffle=true) = DataLoader(x; batchsize, shuffle)
 
 function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
+    println("Starting VAEAC Training...")
     model = VAEAC(input_dim, latent_dim, hidden_dim)
     ps, st = Lux.setup(Random.default_rng(), model)
 
@@ -202,6 +203,7 @@ function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
     )
     ts = Lux.Training.TrainState(model, ps, st, opt)
 
+    println("Training for $epochs epochs...")
     for epoch in 1:epochs
         β = min(1f0, epoch / 15f0)
         local_loss_fn = (m, ps, st, batch) -> loss_fn(m, ps, st, batch, β)

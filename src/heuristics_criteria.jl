@@ -68,19 +68,22 @@ end
 #     accuracy_sdp(sm.nn(x), sm.output)
 # end
 
-function accuracy_sdp(ii::SBitSet, sm, sampler, num_samples; verbose = false)
-    r = condition(sampler, sm.input, ii)
-    x_flat = sample_all(r, num_samples)
-    img_dim = Int(sqrt(size(x_flat, 1)))
-    x_reshaped = reshape(x_flat, img_dim, img_dim, 1, num_samples)
+# function accuracy_sdp(ii, sm, sampler, num_samples; verbose=false)
+#     @timeit Main.to "condition" r = condition(sampler, sm.input, ii)
 
-    model = sm.nn.model
-    ps = sm.nn.ps
-    st = sm.nn.st
-    
-    y, _ = @jit model(x_reshaped, ps, st)
-    accuracy_sdp(y, sm.output)
-end
+#     @timeit Main.to "sample_all" x_flat = sample_all(r, num_samples)
+
+#     @timeit Main.to "reshape" begin
+#         img_dim = isqrt(size(x_flat, 1))
+#         x = reshape(x_flat, img_dim, img_dim, 1, num_samples)
+#     end
+
+#     @timeit Main.to "model" y = sm.nn(x)
+
+#     @timeit Main.to "acc_post" acc = accuracy_sdp(y, sm.output)
+
+#     return acc
+# end
 
 
 function isvalid_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples; verbose = false)
@@ -90,17 +93,31 @@ function isvalid_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples; verbose = false)
     o
 end
 
-function isvalid_sdp(ii::SBitSet, sm, sampler, num_samples; verbose = false)
-    acc = accuracy_sdp(ii, sm, sampler, num_samples)
-    verbose && println("accuracy  = ",acc)
-    acc
-end
+# function isvalid_sdp(ii::SBitSet, sm, sampler, num_samples; verbose = false)
+#     acc = accuracy_sdp(ii, sm, sampler, num_samples)
+#     verbose && println("accuracy  = ",acc)
+#     acc
+# end
 
 function heuristic_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples; verbose = false)
     acc = accuracy_sdp(ii, sm, sampler, num_samples)
     h = ϵ - acc
     verbose && println("heuristic = ", h)
     max(h, 0)
+end
+
+function accuracy_sdp(ii::SBitSet, sm, sampler, num_samples; verbose=false)
+    r = condition(sampler, sm.input, ii)
+    x = sample_all(r, num_samples)      # (28,28,n)
+    scores = sm.nn(x)                   # (10,n)
+    acc = accuracy_sdp(scores, sm.output)
+    verbose && println("accuracy = ", acc)
+    acc
+end
+
+function accuracy_sdp(scores::AbstractMatrix, y::Integer)
+    preds = vec(argmax(scores, dims=1))  # Vector{Int} in 1..10
+    mean(preds .== y)
 end
 
 """
@@ -461,6 +478,7 @@ depth_first(ii::Tuple)  = mapreduce(length, +, ii)
 
 
 function shapley_heuristic(ii::SBitSet, sm, sampler, num_samples, verbose = false)
+    # println("shapley_heuristic SBitSet")
     r = condition(sampler, sm.input, ii)
     x = sample_all(r, num_samples)
     # y = Flux.onecold(sm.nn(x)) .== sm.output
@@ -519,7 +537,7 @@ struct ShapleyHeuristic{S,SM}
 end
 
 function ShapleyHeuristic(sm, sampler, num_samples, verbose = false)
-    ShapleyHeuristic(sampler, sm, num_samples, verbose)
+    ShapleyHeuristic(sm, sampler, num_samples, verbose)
 end
 
 (sp::ShapleyHeuristic)(ii::SBitSet) = heuristic_sdp(ii, sp.sm, 0.99, sp.sampler, sp.num_samples)
