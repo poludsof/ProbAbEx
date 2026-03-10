@@ -86,10 +86,17 @@ end
 # end
 
 
-function isvalid_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples; verbose = false)
-    acc = accuracy_sdp(ii, sm, sampler, num_samples)
+function isvalid_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples, compiled_acc; verbose = false)
+    acc = accuracy_sdp(ii, sm, sampler, num_samples, compiled_sample)
     o = acc ≥ ϵ
     verbose && println("accuracy  = ",acc , " threshold = ", ϵ, " isvalid = ", o)
+    o
+end
+
+function isvalid_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; verbose=false)
+    acc = accuracy_sdp(ii, sm, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls)
+    o = acc ≥ ϵ
+    verbose && println("accuracy = ", acc, " threshold = ", ϵ, " isvalid = ", o)
     o
 end
 
@@ -99,16 +106,23 @@ end
 #     acc
 # end
 
-function heuristic_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples; verbose = false)
-    acc = accuracy_sdp(ii, sm, sampler, num_samples)
+# function heuristic_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples, compiled_sample; verbose = false)
+#     acc = accuracy_sdp(ii, sm, sampler, num_samples, compiled_sample)
+#     h = ϵ - acc
+#     verbose && println("heuristic = ", h)
+#     max(h, 0)
+# end
+
+function heuristic_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; verbose=false)
+    acc = accuracy_sdp(ii, sm, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls)
     h = ϵ - acc
     verbose && println("heuristic = ", h)
     max(h, 0)
 end
 
-function accuracy_sdp(ii::SBitSet, sm, sampler, num_samples; verbose=false)
+function accuracy_sdp(ii::SBitSet, sm, sampler, num_samples, compiled_sample; verbose=false)
     r = condition(sampler, sm.input, ii)
-    x = sample_all(r, num_samples)      # (28,28,n)
+    x = sample_all(r, compiled_sample, num_samples)      # (28,28,1,n)
     scores = sm.nn(x)                   # (10,n)
     acc = accuracy_sdp(scores, sm.output)
     verbose && println("accuracy = ", acc)
@@ -533,14 +547,17 @@ struct ShapleyHeuristic{S,SM}
     sm::SM
     sampler::S
     num_samples::Int
+    compiled_acc::Any
+    model_cls::Any
+    ps::Any
+    st::Any
     verbose::Bool
 end
 
-function ShapleyHeuristic(sm, sampler, num_samples, verbose = false)
-    ShapleyHeuristic(sm, sampler, num_samples, verbose)
+function ShapleyHeuristic(sm, sampler, num_samples, compiled_acc, model_cls, ps, st, verbose = false)
+    ShapleyHeuristic(sm, sampler, num_samples, compiled_acc, model_cls, ps, st, verbose)
 end
 
-(sp::ShapleyHeuristic)(ii::SBitSet) = heuristic_sdp(ii, sp.sm, 0.99, sp.sampler, sp.num_samples)
-(sp::ShapleyHeuristic)(ii::Tuple) = shapley_heuristic(ii, sp.sm, sp.sampler, sp.num_samples)
-
+(sp::ShapleyHeuristic)(ii::SBitSet) = heuristic_sdp(ii, sp.sm, 0.99, sp.sampler, sp.num_samples, sp.compiled_acc, sp.model_cls, sp.ps, sp.st)
+# (sp::ShapleyHeuristic)(ii::Tuple) = shapley_heuristic(ii, sp.sm, sp.sampler, sp.num_samples, sp.compiled_acc)
 

@@ -19,14 +19,15 @@ function get_mnist_data()
     train_y = PAE.onehot_labels(train_y)
     test_y = PAE.onehot_labels(test_y)
 
-    return train_X_bin_neg, train_y, test_X_bin_neg, test_y
+    return train_X_binary, train_y, test_X_binary, test_y
 end
 
-function init_sbitset(n::Int, k = 0) 
+function init_sbitset(n::Int, k=0)
     N = ceil(Int, n / 64)
     x = SBitSet{N, UInt64}()
-    k == 0 && return(x)
-    for i in rand(1:n, k)
+    k == 0 && return x
+
+    for i in randperm(n)[1:k]
         x = push(x, i)
     end
     x
@@ -48,65 +49,77 @@ st_dev = Lux.testmode(st_cls) |> dev
 
 infer(model, x, ps, st) = first(Lux.apply(model, x, ps, st))
 
-x0 = zeros(Float32, 28, 28, 1, 1) |> dev
+number_of_samples = 100
+x0 = zeros(Float32, 28, 28, 1, number_of_samples) |> dev
 compiled_infer = @compile infer(model_cls, x0, ps_dev, st_dev)
+nn(x) = compiled_infer(model_cls, x, ps_dev, st_dev)
 
-nn1(x) = compiled_infer(model_cls, x, ps_dev, st_dev)
+x1 = zeros(Float32, 28, 28, 1, 1) |> dev
+compiled_infer_1 = @compile infer(model_cls, x1, ps_dev, st_dev)
+nn1(x) = compiled_infer_1(model_cls, x, ps_dev, st_dev)
 
-train_X_bin_neg, train_y, test_X_bin_neg, test_y = get_mnist_data()
-xₛ = Float32.(train_X_bin_neg[:, 2])
+train_X_binary, train_y, test_X_binary, test_y = get_mnist_data()
+xₛ = Float32.(train_X_binary[:, 2])
 x_matrix = reshape(xₛ, 28, 28, 1, 1) |> dev
 yₛ =  argmax(train_y[:, 2])
-sm = PAE.Subset_minimal(nn1, xₛ, yₛ)
+sm = PAE.Subset_minimal(nn, xₛ, yₛ)
+println("sm.output: ", sm.output)
 
-logits = Array(vec(sm.nn(x_matrix)))
-pred_digit = argmax(logits) - 1
+## checking if it works on GPU and just to see the predicted label
+logits = Array(vec(nn1(x_matrix)))
+pred_digit = argmax(logits)
 println("Predicted label: ", pred_digit, " True label: ", yₛ)
-
-
 
 # #? sampler
 sampler = PAE.load_vaeac_sampler(joinpath(@__DIR__, "..", "models", "use_this_vaeac.jls"), dev)
 
-#? run search
-#! add TIME
-# println("Fields of sm.nn: ", typeof(sm.nn))
-# solution_subsets = PAE.forward_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.1, sampler, 10), PAE.ShapleyHeuristic(sm, sampler, 10); refine_with_backward = false, terminate_on_first_solution=true)
-
-
-
 dev = sampler.dev
 ldim = sampler.model.ldim
 
-number_of_samples = 5000
+# number_of_samples = 1000 #! defined above
 
-x01_B0 = zeros(Float32, 28, 28, 1, number_of_samples) |> dev
-m_B0   = zeros(Float32, 28, 28, 1, number_of_samples) |> dev
-ε0     = zeros(Float32, ldim, number_of_samples) |> dev
-u0     = zeros(Float32, 28, 28, 1, number_of_samples) |> dev
+# x01_B0 = zeros(Float32, 28, 28, 1, number_of_samples) |> dev
+# m_B0   = zeros(Float32, 28, 28, 1, number_of_samples) |> dev
+# ε0     = zeros(Float32, ldim, number_of_samples) |> dev
+# u0     = zeros(Float32, 28, 28, 1, number_of_samples) |> dev
 
-compiled_sample = Reactant.@compile PAE.sample_all_core(
-    sampler.model.prior,
-    sampler.model.decoder,
-    ldim,
-    x01_B0,
-    m_B0,
-    ε0,
-    u0,
-    sampler.ps.prior,
-    sampler.st.prior,
-    sampler.ps.decoder,
-    sampler.st.decoder,
-    true
-)
+# compiled_sample = Reactant.@compile PAE.sample_all_core(
+#     sampler.model.prior,
+#     sampler.model.decoder,
+#     ldim,
+#     x01_B0,
+#     m_B0,
+#     ε0,
+#     u0,
+#     sampler.ps.prior,
+#     sampler.st.prior,
+#     sampler.ps.decoder,
+#     sampler.st.decoder,
+#     true
+# )
+
+compiled_acc = PAE.build_compiled_accuracy(sampler, model_cls, ps_dev, st_dev, dev, number_of_samples)
+
+# using BenchmarkTools
+II = init_sbitset(length(xₛ), 1)
+println("length(II): ", length(II))
+# r = PAE.condition(sampler, xₛ, II)
+# x = PAE.sample_all(r, number_of_samples)
+# @benchmark PAE.sample_all_compiled(r, compiled_sample, number_of_samples)
+# @show size(x)
+
+acc = PAE.accuracy_sdp(II, sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; verbose=true) #! test accuracy_sdp + sample on GPU
+o = PAE.isvalid_sdp(II, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; verbose=true)
+h = PAE.heuristic_sdp(II, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; verbose=true)
 
 
-II = init_sbitset(length(xₛ), 50)
-r = PAE.condition(sampler, xₛ, II)
-# x = PAE.sample_all(r, 100)
-x = PAE.sample_all_compiled(r, compiled_sample, number_of_samples; binary=true)
-@show size(x)
+##? run search
+#! add TIME
+# println("Fields of sm.nn: ", typeof(sm.nn))
+solution_subsets = PAE.forward_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev), PAE.ShapleyHeuristic(sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev); refine_with_backward = false, terminate_on_first_solution=true)
 
+
+## Sampling and visualization functions
 
 using ColorTypes, FileIO
 function save_samples_grid(x::AbstractArray{<:Real,3};
