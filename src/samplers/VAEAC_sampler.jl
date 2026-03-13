@@ -338,3 +338,15 @@ function accuracy_sdp(ii::SBitSet, sm, sampler, num_samples, compiled_acc,
     verbose && println("accuracy = ", acc)
     acc
 end
+
+function accuracy_sdp_batched(ii::SBitSet, sm, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; batch_size=1000)
+    n_batches = div(num_samples, batch_size)
+    total_acc = 0f0
+
+    for _ in 1:n_batches
+        acc = accuracy_sdp(ii, sm, sampler, batch_size, compiled_acc, model_cls, ps_cls, st_cls)
+        total_acc += acc
+    end
+
+    return total_acc / n_batches
+end

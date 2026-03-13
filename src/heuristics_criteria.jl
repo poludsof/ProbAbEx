@@ -120,6 +120,18 @@ function heuristic_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples, compiled_acc, 
     max(h, 0)
 end
 
+
+function isvalid_sdp_batched(ii::SBitSet, sm, ϵ, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; batch_size=1000)
+    acc = accuracy_sdp_batched(ii, sm, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; batch_size)
+    acc ≥ ϵ
+end
+
+function heuristic_sdp_batched(ii::SBitSet, sm, ϵ, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; batch_size=1000)
+    acc = accuracy_sdp_batched(ii, sm, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; batch_size)
+    max(ϵ - acc, 0)
+end
+
+##
 function accuracy_sdp(ii::SBitSet, sm, sampler, num_samples, compiled_sample; verbose=false)
     r = condition(sampler, sm.input, ii)
     x = sample_all(r, compiled_sample, num_samples)      # (28,28,1,n)
@@ -558,6 +570,7 @@ function ShapleyHeuristic(sm, sampler, num_samples, compiled_acc, model_cls, ps,
     ShapleyHeuristic(sm, sampler, num_samples, compiled_acc, model_cls, ps, st, verbose)
 end
 
-(sp::ShapleyHeuristic)(ii::SBitSet) = heuristic_sdp(ii, sp.sm, 0.99, sp.sampler, sp.num_samples, sp.compiled_acc, sp.model_cls, sp.ps, sp.st)
+(sp::ShapleyHeuristic)(ii::SBitSet) = heuristic_sdp_batched(ii, sp.sm, 0.99, sp.sampler, sp.num_samples, sp.compiled_acc, sp.model_cls, sp.ps, sp.st; batch_size=1000)
+# (sp::ShapleyHeuristic)(ii::SBitSet) = heuristic_sdp(ii, sp.sm, 0.99, sp.sampler, sp.num_samples, sp.compiled_acc, sp.model_cls, sp.ps, sp.st)
 # (sp::ShapleyHeuristic)(ii::Tuple) = shapley_heuristic(ii, sp.sm, sp.sampler, sp.num_samples, sp.compiled_acc)
 

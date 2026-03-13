@@ -49,8 +49,10 @@ st_dev = Lux.testmode(st_cls) |> dev
 
 infer(model, x, ps, st) = first(Lux.apply(model, x, ps, st))
 
-number_of_samples = 100
-x0 = zeros(Float32, 28, 28, 1, number_of_samples) |> dev
+number_of_samples = 100000
+batch_size = 1000
+
+x0 = zeros(Float32, 28, 28, 1, batch_size) |> dev
 compiled_infer = @compile infer(model_cls, x0, ps_dev, st_dev)
 nn(x) = compiled_infer(model_cls, x, ps_dev, st_dev)
 
@@ -98,7 +100,8 @@ ldim = sampler.model.ldim
 #     true
 # )
 
-compiled_acc = PAE.build_compiled_accuracy(sampler, model_cls, ps_dev, st_dev, dev, number_of_samples)
+compiled_acc = PAE.build_compiled_accuracy(sampler, model_cls, ps_dev, st_dev, dev, batch_size)
+# compiled_acc = PAE.build_compiled_accuracy(sampler, model_cls, ps_dev, st_dev, dev, number_of_samples) #! not working with 100k samples
 
 # using BenchmarkTools
 II = init_sbitset(length(xₛ), 1)
@@ -108,16 +111,30 @@ println("length(II): ", length(II))
 # @benchmark PAE.sample_all_compiled(r, compiled_sample, number_of_samples)
 # @show size(x)
 
-acc = PAE.accuracy_sdp(II, sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; verbose=true) #! test accuracy_sdp + sample on GPU
-o = PAE.isvalid_sdp(II, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; verbose=true)
-h = PAE.heuristic_sdp(II, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; verbose=true)
+#! with batch size
+acc = PAE.accuracy_sdp_batched(II, sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; batch_size=batch_size)
+
+
+#! not with batch size
+# acc = PAE.accuracy_sdp(II, sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; verbose=true) #! test accuracy_sdp + sample on GPU
+# o = PAE.isvalid_sdp(II, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; verbose=true)
+# h = PAE.heuristic_sdp(II, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; verbose=true)
 
 
 ##? run search
 #! add TIME
 # println("Fields of sm.nn: ", typeof(sm.nn))
-solution_subsets = PAE.forward_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev), PAE.ShapleyHeuristic(sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev); refine_with_backward = false, terminate_on_first_solution=true)
 
+to = TimerOutput()
+
+# @timeit to "forward_search" begin 
+#     solution_subsets = PAE.forward_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.8, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev), PAE.ShapleyHeuristic(sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev); refine_with_backward = false, terminate_on_first_solution=true)
+# end
+
+@timeit to "accuracy and sample" begin
+    acc = PAE.accuracy_sdp_batched(II, sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; batch_size=batch_size)
+end
+show(to)
 
 ## Sampling and visualization functions
 

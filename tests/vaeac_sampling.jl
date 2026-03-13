@@ -143,10 +143,15 @@ ps = to_cpu(ps)
 st = to_cpu(st)
 model = to_cpu(model)
 
-x_raw = PAE.load_binary_mnist_matrix()[:, 6]
+x_raw = PAE.load_binary_mnist_matrix()[:, 2]
 x_cpu = reshape(Float32.(x_raw), :, 1)
 
 mask_raw = rand(Float32, 784) .> 0.8
+# mask_raw = falses(784)
+# for idx in solution_subsets # ! use solution_subsets from forward_search to create mask
+#     mask_raw[idx] = true
+# end
+
 mask = reshape(Float32.(mask_raw), :, 1)
 
-sample_and_save_styled(x_cpu, mask, model, ps, st, binary=false, filename="test_test_test.png")
+sample_and_save_styled(x_cpu, mask, model, ps, st, binary=false, filename="test_test_test_new.png")
