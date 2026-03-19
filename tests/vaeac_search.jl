@@ -49,8 +49,8 @@ st_dev = Lux.testmode(st_cls) |> dev
 
 infer(model, x, ps, st) = first(Lux.apply(model, x, ps, st))
 
-number_of_samples = 100000
-batch_size = 1000
+number_of_samples = 10000
+batch_size = 5000
 
 x0 = zeros(Float32, 28, 28, 1, batch_size) |> dev
 compiled_infer = @compile infer(model_cls, x0, ps_dev, st_dev)
@@ -100,10 +100,20 @@ ldim = sampler.model.ldim
 #     true
 # )
 
-compiled_acc = PAE.build_compiled_accuracy(sampler, model_cls, ps_dev, st_dev, dev, batch_size)
+# compiled_acc = PAE.build_compiled_acc_step(sampler, model_cls, ps_dev, st_dev, dev, batch_size)
 # compiled_acc = PAE.build_compiled_accuracy(sampler, model_cls, ps_dev, st_dev, dev, number_of_samples) #! not working with 100k samples
 
-# using BenchmarkTools
+compiled_acc_looped = PAE.build_compiled_accuracy_looped(sampler, model_cls, ps_dev, st_dev, dev, number_of_samples, batch_size)
+
+## compile GPU random fill once here
+ldim = sampler.model.ldim
+ε_dev = Reactant.ConcreteRArray(zeros(Float32, ldim, batch_size)) |> dev
+u_dev = Reactant.ConcreteRArray(zeros(Float32, 28, 28, 1, batch_size)) |> dev
+
+fill_randn! = @compile (x -> Reactant.Random.randn!(x))(ε_dev)
+fill_rand!  = @compile (x -> Reactant.Random.rand!(x))(u_dev)
+
+##
 II = init_sbitset(length(xₛ), 1)
 println("length(II): ", length(II))
 # r = PAE.condition(sampler, xₛ, II)
@@ -112,7 +122,12 @@ println("length(II): ", length(II))
 # @show size(x)
 
 #! with batch size
-acc = PAE.accuracy_sdp_batched(II, sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; batch_size=batch_size)
+# acc = PAE.accuracy_sdp_batched(II, sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev, ε_dev, u_dev, fill_randn!, fill_rand!; batch_size=batch_size)
+# o = PAE.isvalid_sdp_batched(II, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev, ε_dev, u_dev, fill_randn!, fill_rand!; batch_size=batch_size, verbose=true)
+# h = PAE.heuristic_sdp_batched(II, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev, ε_dev, u_dev, fill_randn!, fill_rand!; batch_size=batch_size, verbose=true)
+acc = PAE.accuracy_sdp_batched(II, sm, sampler, compiled_acc_looped, model_cls, ps_dev, st_dev)
+o = PAE.isvalid_sdp_batched(II, sm, 0.9, sampler, compiled_acc_looped, model_cls, ps_dev, st_dev)
+h = PAE.heuristic_sdp_batched(II, sm, 0.9, sampler, compiled_acc_looped, model_cls, ps_dev, st_dev)
 
 
 #! not with batch size
@@ -120,21 +135,35 @@ acc = PAE.accuracy_sdp_batched(II, sm, sampler, number_of_samples, compiled_acc,
 # o = PAE.isvalid_sdp(II, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; verbose=true)
 # h = PAE.heuristic_sdp(II, sm, 0.9, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; verbose=true)
 
-
 ##? run search
 #! add TIME
 # println("Fields of sm.nn: ", typeof(sm.nn))
 
 to = TimerOutput()
+reset_timer!(PAE.to)
 
-# @timeit to "forward_search" begin 
-#     solution_subsets = PAE.forward_search(sm, II, ii -> PAE.isvalid_sdp(ii, sm, 0.8, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev), PAE.ShapleyHeuristic(sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev); refine_with_backward = false, terminate_on_first_solution=true)
-# end
-
-@timeit to "accuracy and sample" begin
-    acc = PAE.accuracy_sdp_batched(II, sm, sampler, number_of_samples, compiled_acc, model_cls, ps_dev, st_dev; batch_size=batch_size)
+@timeit to "forward_search" begin 
+    solution_subsets = PAE.forward_search(
+                sm, II, 
+                ii -> PAE.isvalid_sdp_batched(ii, sm, 0.5, sampler, compiled_acc_looped, model_cls, ps_dev, st_dev, verbose=true),
+                PAE.ShapleyHeuristic(sm, sampler, 0.99, compiled_acc_looped, model_cls, ps_dev, st_dev), 
+                refine_with_backward = false, 
+                terminate_on_first_solution=true)
 end
 show(to)
+
+# @timeit to "isvalid function" begin
+#     for _ in 1:5
+#          o = PAE.isvalid_sdp_batched(II, sm, 0.9, sampler, compiled_acc_looped, model_cls, ps_dev, st_dev)
+#     end
+# end
+# show(to)
+
+# @timeit to "accuracy and sample" begin
+#     PAE.accuracy_sdp_batched(II, sm, sampler, compiled_acc_looped, model_cls, ps_dev, st_dev)
+# end
+# show(to)
+show(PAE.to)
 
 ## Sampling and visualization functions
 

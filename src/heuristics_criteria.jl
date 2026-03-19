@@ -121,14 +121,23 @@ function heuristic_sdp(ii::SBitSet, sm, ϵ, sampler, num_samples, compiled_acc, 
 end
 
 
-function isvalid_sdp_batched(ii::SBitSet, sm, ϵ, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; batch_size=1000)
-    acc = accuracy_sdp_batched(ii, sm, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; batch_size)
-    acc ≥ ϵ
+function isvalid_sdp_batched(ii, sm, ϵ, sampler, cal, model_cls, ps, st; verbose=false)
+    @timeit to "accuracy_sdp_batched (isval)" acc = accuracy_sdp_batched(ii, sm, sampler, cal, model_cls, ps, st)
+    @timeit to "gpu->cpu sync (isval)" a = Float32(acc)
+    @timeit to "compare (isval)" isvalid = a ≥ ϵ
+    verbose && println("accuracy = ", acc, " threshold = ", ϵ, " isvalid = ", isvalid)
+    return isvalid
 end
 
-function heuristic_sdp_batched(ii::SBitSet, sm, ϵ, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; batch_size=1000)
-    acc = accuracy_sdp_batched(ii, sm, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; batch_size)
-    max(ϵ - acc, 0)
+function heuristic_sdp_batched(ii::SBitSet, sm, ϵ, sampler, cal, model_cls, ps, st; verbose=false)
+    @timeit to "accuracy_sdp_batched (h)" acc = accuracy_sdp_batched(ii, sm, sampler, cal, model_cls, ps, st)
+    
+    # @timeit to "h = ϵ - acc" h = ϵ - acc 
+    @timeit to "gpu->cpu sync (h)" acc_cpu = Float32(acc)
+    @timeit to "h = ϵ - acc_cpu" h = ϵ - acc_cpu
+
+    verbose && println("heuristic = ", h)
+    @timeit to "max(h, 0)" max(h, 0)
 end
 
 ##
@@ -558,7 +567,7 @@ end
 struct ShapleyHeuristic{S,SM}
     sm::SM
     sampler::S
-    num_samples::Int
+    ϵ::Float64
     compiled_acc::Any
     model_cls::Any
     ps::Any
@@ -566,11 +575,11 @@ struct ShapleyHeuristic{S,SM}
     verbose::Bool
 end
 
-function ShapleyHeuristic(sm, sampler, num_samples, compiled_acc, model_cls, ps, st, verbose = false)
-    ShapleyHeuristic(sm, sampler, num_samples, compiled_acc, model_cls, ps, st, verbose)
+function ShapleyHeuristic(sm, sampler, ϵ, compiled_acc, model_cls, ps, st, verbose = false)
+    ShapleyHeuristic(sm, sampler, ϵ, compiled_acc, model_cls, ps, st, verbose)
 end
 
-(sp::ShapleyHeuristic)(ii::SBitSet) = heuristic_sdp_batched(ii, sp.sm, 0.99, sp.sampler, sp.num_samples, sp.compiled_acc, sp.model_cls, sp.ps, sp.st; batch_size=1000)
+(sp::ShapleyHeuristic)(ii::SBitSet) = heuristic_sdp_batched(ii, sp.sm, sp.ϵ, sp.sampler, sp.compiled_acc, sp.model_cls, sp.ps, sp.st)
 # (sp::ShapleyHeuristic)(ii::SBitSet) = heuristic_sdp(ii, sp.sm, 0.99, sp.sampler, sp.num_samples, sp.compiled_acc, sp.model_cls, sp.ps, sp.st)
 # (sp::ShapleyHeuristic)(ii::Tuple) = shapley_heuristic(ii, sp.sm, sp.sampler, sp.num_samples, sp.compiled_acc)
 

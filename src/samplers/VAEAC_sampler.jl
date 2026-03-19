@@ -290,24 +290,31 @@ function accuracy_sdp_core( prior, decoder, cls_model,
     return sum(correct) / Float32(n)
 end
 
-function build_compiled_accuracy(sampler, model_cls, ps_cls, st_cls, dev, num_samples)
+function build_compiled_acc_step(sampler, model_cls, ps_cls, st_cls, dev, num_samples)
     ldim = sampler.model.ldim
 
-    x01_0 = zeros(Float32, 28, 28, 1, 1) |> dev # one example image
-    m1_0  = zeros(Float32, 28, 28, 1, 1) |> dev # one example mask
-    ε0    = zeros(Float32, ldim, num_samples) |> dev # (random) latent noise for sampling
-    u0    = zeros(Float32, 28, 28, 1, num_samples) |> dev # 
+    x01_0  = zeros(Float32, 28, 28, 1, 1) |> dev
+    m1_0   = zeros(Float32, 28, 28, 1, 1) |> dev
+    ε0     = zeros(Float32, ldim, num_samples) |> dev
+    u0     = zeros(Float32, 28, 28, 1, num_samples) |> dev
+    total0 = zeros(Float32) |> dev  # scalar accumulator on GPU
 
-    Reactant.@compile accuracy_sdp_core(
-        sampler.model.prior,
-        sampler.model.decoder,
-        model_cls,
+    Reactant.@compile acc_step(
+        sampler.model.prior, sampler.model.decoder, model_cls,
         x01_0, m1_0, ε0, u0,
         sampler.ps.prior, sampler.st.prior,
         sampler.ps.decoder, sampler.st.decoder,
         ps_cls, st_cls,
-        1, ldim, true
+        total0, 1, ldim, true
     )
+end
+
+function acc_step(prior, decoder, cls_model, x01, m1, ε, u, ps_prior, st_prior, ps_dec, st_dec, ps_cls, st_cls, total, y, ldim, binary)
+    acc = accuracy_sdp_core(prior, decoder, cls_model,
+                            x01, m1, ε, u,
+                            ps_prior, st_prior, ps_dec, st_dec, ps_cls, st_cls,
+                            y, ldim, binary)
+    return total .+ acc  # addition compiled into XLA, stays on GPU
 end
 
 function accuracy_sdp(ii::SBitSet, sm, sampler, num_samples, compiled_acc,
@@ -339,14 +346,104 @@ function accuracy_sdp(ii::SBitSet, sm, sampler, num_samples, compiled_acc,
     acc
 end
 
-function accuracy_sdp_batched(ii::SBitSet, sm, sampler, num_samples, compiled_acc, model_cls, ps_cls, st_cls; batch_size=1000)
-    n_batches = div(num_samples, batch_size)
-    total_acc = 0f0
+# function accuracy_sdp_batched(ii::SBitSet, sm, sampler, num_samples, compiled_acc,
+#                                model_cls, ps_cls, st_cls, ε_dev, u_dev,
+#                                fill_randn!, fill_rand!; batch_size=1000)
+#     n_batches = div(num_samples, batch_size)
 
+#     @timeit to "mask+move to gpu" begin
+#         mask = fill(false, length(sm.input))
+#         for i in ii; mask[i] = true; end
+#         dev = sampler.dev
+#         x01 = reshape(clamp.(Float32.(sm.input), 0f0, 1f0), 28, 28, 1, 1) |> dev
+#         m1  = reshape(Float32.(mask), 28, 28, 1, 1) |> dev
+#     end
+
+#     total = zeros(Float32) |> dev
+#     for _ in 1:n_batches
+#         @timeit to "gpu randn" fill_randn!(ε_dev)
+#         @timeit to "gpu rand"  fill_rand!(u_dev)
+#         @timeit to "compiled_acc" begin
+#                         total = compiled_acc(
+#                             sampler.model.prior, sampler.model.decoder, model_cls,
+#                             x01, m1, ε_dev, u_dev,
+#                             sampler.ps.prior, sampler.st.prior,
+#                             sampler.ps.decoder, sampler.st.decoder,
+#                             ps_cls, st_cls, total,
+#                             sm.output, sampler.model.ldim, true
+#                         )
+#         end
+#         # @timeit to "total_acc" total_acc +=acc
+#     end
+
+#     return Array(total)[1] / n_batches
+# end
+
+
+
+
+##! NEW
+struct CompiledAccLooped
+    f::Any
+    n_batches::Int
+    batch_size::Int
+end
+
+function accuracy_sdp_core_looped(prior, decoder, cls_model, x01, m1, ps_prior, st_prior, ps_dec, st_dec, ps_cls, st_cls, y, ldim, binary, n_batches, batch_size)
+    total = 0f0
     for _ in 1:n_batches
-        acc = accuracy_sdp(ii, sm, sampler, batch_size, compiled_acc, model_cls, ps_cls, st_cls)
-        total_acc += acc
+        ε = Reactant.Random.randn(Float32, ldim, batch_size)
+        u = Reactant.Random.rand(Float32, 28, 28, 1, batch_size)
+        acc = accuracy_sdp_core(prior, decoder, cls_model, x01, m1, ε, u, ps_prior, st_prior, ps_dec, st_dec, ps_cls, st_cls, y, ldim, binary)
+        total += acc
+    end
+    return total / Float32(n_batches)
+end
+
+function build_compiled_accuracy_looped(sampler, model_cls, ps_cls, st_cls, dev, num_samples, batch_size)
+    ldim = sampler.model.ldim
+    n_batches = div(num_samples, batch_size)
+
+    x01_0 = zeros(Float32, 28, 28, 1, 1) |> dev
+    m1_0  = zeros(Float32, 28, 28, 1, 1) |> dev
+
+    f = Reactant.@compile accuracy_sdp_core_looped(
+        sampler.model.prior, sampler.model.decoder, model_cls,
+        x01_0, m1_0,
+        sampler.ps.prior, sampler.st.prior,
+        sampler.ps.decoder, sampler.st.decoder,
+        ps_cls, st_cls,
+        1, ldim, true, n_batches, batch_size
+    )
+    CompiledAccLooped(f, n_batches, batch_size)
+end
+
+function accuracy_sdp_batched(ii::SBitSet, sm, sampler, cal::CompiledAccLooped, model_cls, ps_cls, st_cls)
+    
+    @timeit to "mask+move to gpu" begin
+        mask = fill(false, length(sm.input))
+        for i in ii; mask[i] = true; end
+        dev = sampler.dev
+        x01 = reshape(clamp.(Float32.(sm.input), 0f0, 1f0), 28, 28, 1, 1) |> dev
+        m1  = reshape(Float32.(mask), 28, 28, 1, 1) |> dev
     end
 
-    return total_acc / n_batches
+    @timeit to "compiled_acc_looped" begin
+        result = cal.f(
+            sampler.model.prior, sampler.model.decoder, model_cls,
+            x01, m1,
+            sampler.ps.prior, sampler.st.prior,
+            sampler.ps.decoder, sampler.st.decoder,
+            ps_cls, st_cls,
+            sm.output, sampler.model.ldim, true,
+            cal.n_batches, cal.batch_size
+        )
+    end
+
+    # @timeit to "gpu->cpu sync" begin
+    #     result = Float32(result)
+    # end
+    # println(typeof(result))
+
+    return result
 end

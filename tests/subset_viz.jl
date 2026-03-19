@@ -57,6 +57,9 @@ for idx in solution_subsets # ! use solution_subsets from forward_search to crea
 end
 mask = reshape(Float32.(mask_raw), :, 1)
 
+x_raw = PAE.load_binary_mnist_matrix()[:, 2]
+x_cpu = reshape(Float32.(x_raw), :, 1)
+
 create_overlay_image(x_cpu, mask)
 
 ##
@@ -125,4 +128,4 @@ ps = to_cpu(ps)
 st = to_cpu(st)
 model = to_cpu(model)
 
-samples = sample_n_reconstructions(x_cpu, mask, model, ps, st, 5)
+# samples = sample_n_reconstructions(x_cpu, mask, model, ps, st, 5)
