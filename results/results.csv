@@ -1,0 +1,5 @@
+image_idx,threshold,found,subset_size,time_seconds
+2,0.9,true,8,535.5493
+2,0.99,true,13,941.4404
+3,0.9,true,14,1034.5338
+3,0.99,false,0,1359.489

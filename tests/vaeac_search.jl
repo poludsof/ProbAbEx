@@ -49,7 +49,7 @@ st_dev = Lux.testmode(st_cls) |> dev
 
 infer(model, x, ps, st) = first(Lux.apply(model, x, ps, st))
 
-number_of_samples = 10000
+number_of_samples = 50000
 batch_size = 5000
 
 x0 = zeros(Float32, 28, 28, 1, batch_size) |> dev
@@ -73,7 +73,7 @@ pred_digit = argmax(logits)
 println("Predicted label: ", pred_digit, " True label: ", yₛ)
 
 # #? sampler
-sampler = PAE.load_vaeac_sampler(joinpath(@__DIR__, "..", "models", "use_this_vaeac.jls"), dev)
+sampler = PAE.load_vaeac_sampler(joinpath(@__DIR__, "..", "models", "new_vaeac.jls"), dev)
 
 dev = sampler.dev
 ldim = sampler.model.ldim
@@ -142,14 +142,14 @@ h = PAE.heuristic_sdp_batched(II, sm, 0.9, sampler, compiled_acc_looped, model_c
 to = TimerOutput()
 reset_timer!(PAE.to)
 
-@timeit to "forward_search" begin 
-    solution_subsets = PAE.forward_search(
-                sm, II, 
-                ii -> PAE.isvalid_sdp_batched(ii, sm, 0.5, sampler, compiled_acc_looped, model_cls, ps_dev, st_dev, verbose=true),
-                PAE.ShapleyHeuristic(sm, sampler, 0.99, compiled_acc_looped, model_cls, ps_dev, st_dev), 
-                refine_with_backward = false, 
-                terminate_on_first_solution=true)
-end
+# @timeit to "forward_search" begin 
+#     solution_subsets = PAE.forward_search(
+#                 sm, II, 
+#                 ii -> PAE.isvalid_sdp_batched(ii, sm, 0.9, sampler, compiled_acc_looped, model_cls, ps_dev, st_dev, verbose=true),
+#                 PAE.ShapleyHeuristic(sm, sampler, 0.99, compiled_acc_looped, model_cls, ps_dev, st_dev), 
+#                 refine_with_backward = false, 
+#                 terminate_on_first_solution=true)
+# end
 show(to)
 
 # @timeit to "isvalid function" begin
