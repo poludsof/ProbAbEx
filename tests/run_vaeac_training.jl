@@ -26,7 +26,7 @@ end
 Reactant.set_default_backend("gpu")
 dev = reactant_device(; force=true)
 
-ts, logs = PAE.train_vaeac(epochs=20, lr=0.001f0, batch_size=100)
+ts, logs = PAE.train_vaeac(epochs=50, lr=0.001f0, batch_size=100)
 
 
 # model, ps, st = deserialize(joinpath(@__DIR__, "..", "models", "test_deserialize.jls"))

@@ -50,15 +50,15 @@ function create_overlay_image(x_cpu, mask_cpu)
     save("overlay.png", fig)
 end
 
-# # mask_raw = rand(Float32, 784) .> 0.8 # ! random mask for testing
+mask_raw = rand(Float32, 784) .> 0.95 # ! random mask for testing
 # mask_raw = falses(784)
 # for idx in solution_subsets # ! use solution_subsets from forward_search to create mask
 #     mask_raw[idx] = true
 # end
-# mask = reshape(Float32.(mask_raw), :, 1)
+mask = reshape(Float32.(mask_raw), :, 1)
 
-# x_raw = PAE.load_binary_mnist_matrix()[:, 2]
-# x_cpu = reshape(Float32.(x_raw), :, 1)
+x_raw = PAE.load_binary_mnist_matrix()[:, 1]
+x_cpu = reshape(Float32.(x_raw), :, 1)
 
 # create_overlay_image(x_cpu, mask)
 
@@ -81,8 +81,13 @@ function sample_n_reconstructions(x_cpu, mask_cpu, model, ps, st, N; filename="s
         z      = μp .+ exp.(logσp) .* randn(Float32, size(μp))
 
         # Decoder pass
-        z_tiled = repeat(reshape(z, 1, 1, model.ldim, 1), 28, 28, 1, 1)
-        dec_in  = cat(x_masked_img, mask_img, z_tiled, dims=3)
+        # z_tiled = repeat(reshape(z, 1, 1, model.ldim, 1), 28, 28, 1, 1)
+        # dec_in  = cat(x_masked_img, mask_img, z_tiled, dims=3)
+        # logits, _ = Lux.apply(model.decoder, dec_in, ps.decoder, st.decoder)
+        # probs   = reshape(Lux.sigmoid.(logits), :)
+
+
+        dec_in = vcat(z, x_cpu .* mask_cpu, mask_cpu)
         logits, _ = Lux.apply(model.decoder, dec_in, ps.decoder, st.decoder)
         probs   = reshape(Lux.sigmoid.(logits), :)
 
@@ -124,18 +129,105 @@ function sample_n_reconstructions(x_cpu, mask_cpu, model, ps, st, N; filename="s
     return samples
 end
 
-# to_cpu(x) = x
-# to_cpu(x::AbstractArray) = Array(x)
-# to_cpu(nt::NamedTuple) = NamedTuple{keys(nt)}(map(to_cpu, values(nt)))
-# to_cpu(t::Tuple) = map(to_cpu, t)
+function reconstruct_with_proposal(x_cpu, mask_cpu, model, ps, st)
+    st = Lux.testmode(st)
 
-# model, ps, st = deserialize(joinpath(@__DIR__, "..", "models", "use_this_vaeac.jls"))
+    x_img = reshape(x_cpu, 28, 28, 1, 1)
+    mask_img = reshape(mask_cpu, 28, 28, 1, 1)
+    x_masked_img = x_img .* mask_img
 
-# ps = to_cpu(ps)
-# st = to_cpu(st)
-# model = to_cpu(model)
+    prop_in = cat(x_img, mask_img, dims=3)
+    prop_out, _ = Lux.apply(model.proposal, prop_in, ps.proposal, st.proposal)
 
-# samples = sample_n_reconstructions(x_cpu, mask, model, ps, st, 5)
+    μq = @view prop_out[1:model.ldim, :]
+    z = μq
+
+    z_tiled = repeat(reshape(z, 1, 1, model.ldim, 1), 28, 28, 1, 1)
+    dec_in = cat(x_masked_img, mask_img, z_tiled, dims=3)
+
+    logits, _ = Lux.apply(model.decoder, dec_in, ps.decoder, st.decoder)
+    probs = reshape(Lux.sigmoid.(logits), :)
+
+    @show mean(probs)
+    @show mean(probs[mask_cpu .< 0.5])
+    @show minimum(probs)
+    @show maximum(probs)
+
+    return probs
+end
+function check_reconstruction_quality(probs, x_cpu, mask_cpu)
+    unknown = mask_cpu .< 0.5f0
+
+    y = x_cpu[unknown]
+    p = probs[unknown]
+    pred = Float32.(p .> 0.5f0)
+
+    @show mean(y)
+    @show mean(p)
+    @show mean(pred)
+    @show mean(pred .== y)
+
+    pos = y .> 0.5f0
+    neg = y .< 0.5f0
+
+    @show mean(p[pos])
+    @show mean(p[neg])
+
+    tp = sum((pred .== 1f0) .& (y .== 1f0))
+    fp = sum((pred .== 1f0) .& (y .== 0f0))
+    fn = sum((pred .== 0f0) .& (y .== 1f0))
+
+    precision = tp / max(tp + fp, 1)
+    recall = tp / max(tp + fn, 1)
+
+    @show precision
+    @show recall
+end
+function reconstruct_with_prior_mean(x_cpu, mask_cpu, model, ps, st)
+    st = Lux.testmode(st)
+
+    x_img = reshape(x_cpu, 28, 28, 1, 1)
+    mask_img = reshape(mask_cpu, 28, 28, 1, 1)
+    x_masked_img = x_img .* mask_img
+
+    prior_in = cat(x_masked_img, mask_img, dims=3)
+    prior_out, _ = Lux.apply(model.prior, prior_in, ps.prior, st.prior)
+
+    μp = @view prior_out[1:model.ldim, :]
+    z = μp
+
+    z_tiled = repeat(reshape(z, 1, 1, model.ldim, 1), 28, 28, 1, 1)
+    dec_in = cat(x_masked_img, mask_img, z_tiled, dims=3)
+
+    logits, _ = Lux.apply(model.decoder, dec_in, ps.decoder, st.decoder)
+    probs = reshape(Lux.sigmoid.(logits), :)
+
+    return probs
+end
+
+to_cpu(x) = x
+to_cpu(x::AbstractArray) = Array(x)
+to_cpu(nt::NamedTuple) = NamedTuple{keys(nt)}(map(to_cpu, values(nt)))
+to_cpu(t::Tuple) = map(to_cpu, t)
+
+model, ps, st = deserialize(joinpath(@__DIR__, "..", "models", "small_new_vaeac.jls"))
+
+ps = to_cpu(ps)
+st = to_cpu(st)
+model = to_cpu(model)
+
+samples = sample_n_reconstructions(x_cpu, mask, model, ps, st, 5)
+
+
+# probs_q = reconstruct_with_proposal(x_cpu, mask, model, ps, st)
+# probs_p = reconstruct_with_prior_mean(x_cpu, mask, model, ps, st)
+
+# println("proposal:")
+# check_reconstruction_quality(probs_q, x_cpu, mask)
+
+# println("prior:")
+# check_reconstruction_quality(probs_p, x_cpu, mask)
+
 
 
 ## 
@@ -274,4 +366,4 @@ ps = to_cpu(ps); st = to_cpu(st); model = to_cpu(model)
 
 X_binary = PAE.load_binary_mnist_matrix()
 
-visualize_reconstructions("results/results_2.jls", X_binary, model, ps, st; N_samples = 5, output_dir = "result_reconstructions")
+# visualize_reconstructions("results/results_2.jls", X_binary, model, ps, st; N_samples = 5, output_dir = "result_reconstructions")
