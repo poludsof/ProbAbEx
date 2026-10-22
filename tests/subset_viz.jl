@@ -214,7 +214,8 @@ model, ps, st = deserialize(joinpath(@__DIR__, "..", "models", "small_new_vaeac.
 
 ps = to_cpu(ps)
 st = to_cpu(st)
-model = to_cpu(model)
+model = to_cpu(model) 
+# checking git
 
 samples = sample_n_reconstructions(x_cpu, mask, model, ps, st, 5; filename="samples.png", binarize=false)
 
