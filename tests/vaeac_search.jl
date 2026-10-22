@@ -49,8 +49,8 @@ st_dev = Lux.testmode(st_cls) |> dev
 
 infer(model, x, ps, st) = first(Lux.apply(model, x, ps, st))
 
-number_of_samples = 50000
-batch_size = 5000
+number_of_samples = 10000
+batch_size = 1000
 
 x0 = zeros(Float32, 28, 28, 1, batch_size) |> dev
 compiled_infer = @compile infer(model_cls, x0, ps_dev, st_dev)
@@ -61,9 +61,10 @@ compiled_infer_1 = @compile infer(model_cls, x1, ps_dev, st_dev)
 nn1(x) = compiled_infer_1(model_cls, x, ps_dev, st_dev)
 
 train_X_binary, train_y, test_X_binary, test_y = get_mnist_data()
-xₛ = Float32.(train_X_binary[:, 2])
+image_idx = 62
+xₛ = Float32.(train_X_binary[:, image_idx])
 x_matrix = reshape(xₛ, 28, 28, 1, 1) |> dev
-yₛ =  argmax(train_y[:, 2])
+yₛ =  argmax(train_y[:, image_idx])
 sm = PAE.Subset_minimal(nn, xₛ, yₛ)
 println("sm.output: ", sm.output)
 
@@ -73,7 +74,7 @@ pred_digit = argmax(logits)
 println("Predicted label: ", pred_digit, " True label: ", yₛ)
 
 # #? sampler
-sampler = PAE.load_vaeac_sampler(joinpath(@__DIR__, "..", "models", "new_vaeac.jls"), dev)
+sampler = PAE.load_vaeac_sampler(joinpath(@__DIR__, "..", "models", "small_new_vaeac.jls"), dev)
 
 dev = sampler.dev
 ldim = sampler.model.ldim
@@ -164,6 +165,97 @@ show(to)
 # end
 # show(to)
 show(PAE.to)
+
+
+##
+# --- superpixel setup ---
+n_sp    = 64                                        # tune this (try 49, 64, 100)
+labels  = PAE.grid_superpixels(28, 28, 4, 4)            # or slic_superpixels(xₛ, n_sp)
+sp_map, n_sp = PAE.build_sp_map(labels)
+
+sp_sm = PAE.SPSubsetMinimal(sm, n_sp)                   # sm with dims = n_sp
+
+# SBitSet sized for n_sp  (ceil(64/64)=1 chunk is enough for n_sp ≤ 64)
+N_chunks = ceil(Int, n_sp / 64)
+II_sp = SBitSet{N_chunks, UInt64}()                 # empty starting set
+
+sp_isvalid = PAE.make_sp_isvalid(sm, 0.9, sampler, compiled_acc_looped, model_cls, ps_dev, st_dev, sp_map; verbose=true)
+
+sp_heuristic = PAE.SPShapleyHeuristic(PAE.ShapleyHeuristic(sm, sampler, 0.99, compiled_acc_looped, model_cls, ps_dev, st_dev), sp_map)
+
+# --- run search ---
+reset_timer!(PAE.to)
+to = TimerOutput()
+
+@timeit to "forward_search_sp" begin
+    solution_sp = PAE.forward_search(
+        sp_sm, II_sp,
+        sp_isvalid,
+        sp_heuristic,
+        refine_with_backward = false,
+        terminate_on_first_solution = true)
+end
+
+show(to)
+show(PAE.to)
+println()
+# --- convert result back to pixel indices if needed ---
+solution_pixels = PAE.expand_sp_to_pixels(solution_sp, sp_map)
+println("Superpixels found: ", collect(solution_sp))
+println("Pixel count:       ", length(solution_pixels))
+
+
+function visualize_sp_solution2(xₛ::Vector{Float32}, solution_sp, labels::Matrix{Int}; filename="sp_solution.png", title_str="Digit + Superpixel Solution")
+
+    # expand superpixel IDs → pixel mask (same indexing as your codebase)
+    selected = Set(solution_sp)
+    mask = zeros(Float32, 784)
+    for i in 1:28, j in 1:28
+        k = (j-1)*28 + i
+        if labels[i, j] in selected
+            mask[k] = 1f0
+        end
+    end
+
+    # build RGB image — identical logic to create_overlay_image_to_file
+    img = Array{RGB{Float32}}(undef, 28, 28)
+    for i in 1:28, j in 1:28
+        k = (j-1)*28 + i
+        if mask[k] > 0.5f0
+            img[i, j] = xₛ[k] > 0.5f0 ? RGB{Float32}(1f0, 0f0, 0f0) :
+                                           RGB{Float32}(0.3f0, 0f0, 0f0)
+        else
+            v = xₛ[k]
+            img[i, j] = RGB{Float32}(v, v, v)
+        end
+    end
+
+    fig = Figure(resolution = (450, 450), backgroundcolor = :white)
+    ax  = Axis(fig[1, 1])
+
+    ax.title              = title_str
+    ax.titlecolor         = :black
+    ax.xgridvisible       = false;  ax.ygridvisible       = false
+    ax.xticksvisible      = false;  ax.yticksvisible      = false
+    ax.xticklabelsvisible = false;  ax.yticklabelsvisible = false
+    ax.backgroundcolor    = :black
+
+    image!(ax, 0..28, 0..28, img; interpolate = false)
+
+    for k in 0:28
+        hlines!(ax, k; color = :gray20, linewidth = 1)
+        vlines!(ax, k; color = :gray20, linewidth = 1)
+    end
+
+    xlims!(ax, 0, 28)
+    ylims!(ax, 28, 0)
+
+    save(filename, fig)
+    println("Saved to $filename  ($(sum(mask .> 0)) pixels highlighted)")
+end
+visualize_sp_solution2(xₛ, solution_sp, labels)
+
+
 
 ## Sampling and visualization functions
 

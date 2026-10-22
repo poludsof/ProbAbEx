@@ -80,16 +80,16 @@ function sample_n_reconstructions(x_cpu, mask_cpu, model, ps, st, N; filename="s
         logσp  = clamp.(prior_out[model.ldim+1:end, :], -10f0, 10f0)
         z      = μp .+ exp.(logσp) .* randn(Float32, size(μp))
 
-        # Decoder pass
-        # z_tiled = repeat(reshape(z, 1, 1, model.ldim, 1), 28, 28, 1, 1)
-        # dec_in  = cat(x_masked_img, mask_img, z_tiled, dims=3)
-        # logits, _ = Lux.apply(model.decoder, dec_in, ps.decoder, st.decoder)
-        # probs   = reshape(Lux.sigmoid.(logits), :)
-
-
-        dec_in = vcat(z, x_cpu .* mask_cpu, mask_cpu)
+        # For Conv Decoder:
+        z_tiled = repeat(reshape(z, 1, 1, model.ldim, 1), 28, 28, 1, 1)
+        dec_in  = cat(x_masked_img, mask_img, z_tiled, dims=3)
         logits, _ = Lux.apply(model.decoder, dec_in, ps.decoder, st.decoder)
         probs   = reshape(Lux.sigmoid.(logits), :)
+
+        # For MLP Decoder:
+        # dec_in = vcat(z, x_cpu .* mask_cpu, mask_cpu)
+        # logits, _ = Lux.apply(model.decoder, dec_in, ps.decoder, st.decoder)
+        # probs   = reshape(Lux.sigmoid.(logits), :)
 
         img = Array{RGB{Float32}}(undef, 28, 28)
         idx(i, j) = (j-1)*28 + i
@@ -216,7 +216,7 @@ ps = to_cpu(ps)
 st = to_cpu(st)
 model = to_cpu(model)
 
-samples = sample_n_reconstructions(x_cpu, mask, model, ps, st, 5)
+samples = sample_n_reconstructions(x_cpu, mask, model, ps, st, 5; filename="samples.png", binarize=false)
 
 
 # probs_q = reconstruct_with_proposal(x_cpu, mask, model, ps, st)

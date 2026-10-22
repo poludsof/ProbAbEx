@@ -278,6 +278,7 @@ function accuracy_sdp_core( prior, decoder, cls_model,
 
     dec_in = x_masked .* e_x .+ m_B .* e_m .+ z_C # combine masked image, mask, and latent z into decoder input
     logits_spatial, _ = Lux.apply(decoder, dec_in, ps_dec, st_dec)
+    logits_spatial = reshape(logits_spatial, 28, 28, 1, size(logits_spatial, 2)) #! ADDED for new Decoder output shape
     probs = Lux.sigmoid.(logits_spatial)
 
     gen = binary ? Float32.(u .< probs) : Float32.(probs) # optionally sample non-binary image

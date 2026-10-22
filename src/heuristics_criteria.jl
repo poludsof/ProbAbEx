@@ -510,6 +510,70 @@ depth_first(ii::Tuple)  = mapreduce(length, +, ii)
 
 
 
+## Superpixels
+
+#simple grid 
+function grid_superpixels(h=28, w=28, block_h=4, block_w=4)
+    labels = zeros(Int, h, w)
+    sp_id = 1
+    for r in 1:block_h:h, c in 1:block_w:w
+        for dr in 0:block_h-1, dc in 0:block_w-1
+            rr, cc = r+dr, c+dc
+            rr ≤ h && cc ≤ w && (labels[rr, cc] = sp_id)
+        end
+        sp_id += 1
+    end
+    return labels   # 28x28 Int matrix, values 1..n_sp
+end
+
+# Build the superpixel → pixel index map
+function build_sp_map(labels::Matrix{Int})
+    flat   = vec(labels)                          # 784-length
+    n_sp   = maximum(flat)
+    sp_map = [findall(==(k), flat) for k in 1:n_sp]   # sp_map[k] = pixel indices
+    return sp_map, n_sp
+end
+
+# Superpixel expansion helper
+function expand_sp_to_pixels(sp_ii::SBitSet, sp_map::Vector{Vector{Int}})
+    pixel_ii = SBitSet{13, UInt64}()      # same type as your current II
+    for sp_idx in sp_ii
+        for px in sp_map[sp_idx]
+            pixel_ii = push(pixel_ii, px)
+        end
+    end
+    return pixel_ii
+end
+
+function make_sp_isvalid(sm, ϵ, sampler, cal, model_cls, ps, st, sp_map; verbose=false)
+    sp_ii -> begin
+        pixel_ii = expand_sp_to_pixels(sp_ii, sp_map)
+        isvalid_sdp_batched(pixel_ii, sm, ϵ, sampler, cal, model_cls, ps, st; verbose=verbose)
+    end
+end
+
+# Superpixel-aware isvalid and heuristic
+struct SPShapleyHeuristic{H}
+    inner::H                        # the original ShapleyHeuristic
+    sp_map::Vector{Vector{Int}}
+end
+
+(h::SPShapleyHeuristic)(sp_ii::SBitSet) = h.inner(expand_sp_to_pixels(sp_ii, h.sp_map))
+
+#Wrapper so forward_search sees the right dimensionality
+# expand_frwd calls new_subsets_fwrd(ii, sm.dims), so sm.dims must equal n_sp, not 784. The simplest fix is a thin wrapper:
+struct SPSubsetMinimal{SM}
+    sm::SM
+    dims::Int    # = n_sp
+end
+
+# forward any other field access to the inner sm
+Base.getproperty(w::SPSubsetMinimal, s::Symbol) =
+    s === :dims ? getfield(w, :dims) :
+    s === :sm   ? getfield(w, :sm)   :
+    getproperty(getfield(w, :sm), s)
+
+
 
 
 function shapley_heuristic(ii::SBitSet, sm, sampler, num_samples, verbose = false)

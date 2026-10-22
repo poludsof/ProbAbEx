@@ -86,9 +86,14 @@ function VAEAC(idim::Int, ldim::Int, h::Int)
     #     Lux.Conv((3,3), 64 => 1, pad=1)
     # )
     decoder = Lux.Chain(
-        Lux.Dense(ldim + 2 * idim => h, relu),
-        Lux.Dense(h => h, relu),
-        Lux.Dense(h => idim)
+        Lux.Conv((3,3), dec_in_ch => 64, relu, pad=1),
+        Lux.BatchNorm(64),
+        Lux.Conv((3,3), 64 => 64, relu, pad=1),
+        Lux.BatchNorm(64),
+        Lux.Conv((3,3), 64 => 32, relu, pad=1),
+        Lux.WrappedFunction(flatten_tensor),   # → (28*28*32, B)
+        Lux.Dense(28*28*32 => hidden_dim, relu),
+        Lux.Dense(hidden_dim => input_dim)     # → (784, B) logits
     )
     return VAEAC(proposal, prior, decoder, idim, ldim)
 end
@@ -146,13 +151,13 @@ function Lux.apply(m::VAEAC, (x_flat, mask_flat, ε), ps, st)
     μp = @view prior_out[1:m.ldim, :]
     logσp = clamp.(prior_out[m.ldim+1:end, :], -10f0, 10f0)
 
-    # z_reshaped = reshape(z, 1, 1, m.ldim, B)
-    # z_tiled = repeat(z_reshaped, 28, 28, 1, 1)
-    # dec_in = cat(x_masked_img, mask_img, z_tiled, dims=3)
-    # logits_spatial, st_dec = Lux.apply(m.decoder, dec_in, ps.decoder, st.decoder)
-    # logits_flat = reshape(logits_spatial, :, B)
-    dec_in = vcat(z, x_flat .* mask_flat, mask_flat)
-    logits_flat, st_dec = Lux.apply(m.decoder, dec_in, ps.decoder, st.decoder)
+    z_reshaped = reshape(z, 1, 1, m.ldim, B)
+    z_tiled = repeat(z_reshaped, 28, 28, 1, 1)
+    dec_in = cat(x_masked_img, mask_img, z_tiled, dims=3)
+    logits_spatial, st_dec = Lux.apply(m.decoder, dec_in, ps.decoder, st.decoder)
+    logits_flat = reshape(logits_spatial, :, B)
+    # dec_in = vcat(z, x_flat .* mask_flat, mask_flat)
+    # logits_flat, st_dec = Lux.apply(m.decoder, dec_in, ps.decoder, st.decoder)
     return (logits_flat, μq, logσq, μp, logσp),
            (proposal=st_prop, prior=st_prior, decoder=st_dec)
 end
@@ -202,39 +207,6 @@ function generate_mask(sz::Tuple{Int,Int}; p_mixed=0.5)
 
     return mask
 end
-
-# function generate_mask(sz::Tuple{Int,Int,Int}; p_mixed=0.5)
-#     # sz = (784, batch_size, 1)
-#     mask = zeros(Float32, sz)
-#     num_pixels, batch_size, _ = sz
-    
-#     for b in 1:batch_size
-#         # Решаем, какой тип маски использовать для этого примера в батче
-#         if rand() < p_mixed
-#             # 1. СЛУЧАЙНЫЕ ПИКСЕЛИ (как было раньше, но с широким диапазоном)
-#             # Оставляем от 5% до 95% изображения видимым
-#             keep_prob = rand(0.05:0.01:0.95)
-#             mask[:, b, 1] .= Float32.(rand(num_pixels) .< keep_prob)
-#         else
-#             # 2. СТРУКТУРНЫЕ БЛОКИ (Inpainting)
-#             # Создаем маску 28x28, чтобы вырезать куски
-#             m2d = ones(Float32, 28, 28)
-            
-#             # Выбираем случайный размер и координаты "дырки"
-#             h, w = rand(10:20), rand(10:20)
-#             y = rand(1:(28 - h + 1))
-#             x = rand(1:(28 - w + 1))
-            
-#             # Затираем блок (0 означает "неизвестно" для вашей функции потерь)
-#             m2d[y:y+h-1, x:x+w-1] .= 0f0
-            
-#             # Если ваша логика: 1 = "знаю", 0 = "не знаю" (как в вашем коде)
-#             # Если наоборот, используйте m2d[y:y+h-1, x:x+w-1] .= 1f0 выше
-#             mask[:, b, 1] .= reshape(m2d, :)
-#         end
-#     end
-#     return mask
-# end
 
 # function bce_with_logits_masked(logits, x, mask)
 #     w = 1f0 .- mask
@@ -317,7 +289,9 @@ function train_vaeac(; epochs=20, lr=0.001f0, batch_size=100)
     println("Training for $epochs epochs NEW...")
     for epoch in 1:epochs
         # β = min(1f0, epoch / 15f0)
-        β = min(0.05f0, Float32(epoch) / 200f0)
+        # β = min(0.1f0, Float32(epoch) / 20f0)
+        β = min(0.5f0, Float32(epoch) / 20f0)
+
         # local_loss_fn = (m, ps, st, batch) -> loss_fn(m, ps, st, batch, β)
         tot_loss = 0f0
         tot_recon = 0f0

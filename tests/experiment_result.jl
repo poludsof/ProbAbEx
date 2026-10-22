@@ -37,12 +37,12 @@ function run_experiments(train_X_binary, train_y, nn, compiled_acc_looped, model
                     sm, II,
                     ii -> PAE.isvalid_sdp_batched(ii, sm, ϵ, sampler, compiled_acc_looped, model_cls, ps_dev, st_dev),
                     PAE.ShapleyHeuristic(sm, sampler, 0.99, compiled_acc_looped, model_cls, ps_dev, st_dev);
-                    time_limit=7000.0,
+                    time_limit=1500.0,
                     refine_with_backward=false,
                     terminate_on_first_solution=true
                 )
                 elapsed = time() - start_time
-                found = solution !== nothing && length(solution) > 0 && elapsed <= 10000.0
+                found = solution !== nothing && length(solution) > 0 && elapsed <= 2000.0
             end
 
             elapsed = TimerOutputs.time(to_exp["forward_search"]) / 1e9  # ns → seconds

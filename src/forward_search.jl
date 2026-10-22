@@ -1,7 +1,7 @@
 """
 Forward search with priority queue based on criterion value for minimal subset search for the FiRST layer of a neural network.
 """
-function forward_search(sm::Subset_minimal, ii::TT, isvalid::Function, heuristic_fun; time_limit=Inf, terminate_on_first_solution=true, exclude_supersets = true, only_smaller = true, refine_with_backward=true, samplers=nothing, num_samples=10000) where {TT}
+function forward_search(sm, ii::TT, isvalid::Function, heuristic_fun; time_limit=Inf, terminate_on_first_solution=true, exclude_supersets = true, only_smaller = true, refine_with_backward=true, samplers=nothing, num_samples=10000) where {TT}
     println("ffffforward_search")
     initial_heuristic = heuristic_fun(ii)
 
